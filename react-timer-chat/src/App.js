@@ -2,6 +2,7 @@
 import React from "react";
 import Timer from "./components/Timer";
 import ChatBubble from "./components/ChatBubble";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const App = () => {
   const startDate = "2024-11-05T18:15:00Z"; // Example date
