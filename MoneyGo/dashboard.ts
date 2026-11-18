@@ -24,6 +24,7 @@ type Transaction = {
   description: string;
   category: Category;
   isSpend: boolean;
+  isIncome: boolean;
 };
 
 const scriptDirectory = fileURLToPath(new URL(".", import.meta.url));
@@ -88,6 +89,7 @@ const transactions: Transaction[] = statementData.transactions.map(
       description: statementTransaction.description,
       category: categorizeDescription(statementTransaction.description),
       isSpend: statementTransaction.isSpend,
+      isIncome: statementTransaction.isIncome,
     };
   },
 );
@@ -101,7 +103,7 @@ for (const transaction of transactions) {
 const transactionsById = new Map(
   transactions.map((transaction) => [transaction.id, transaction]),
 );
-const port = Number(process.env.PORT ?? 4173);
+let port = Number(process.env.PORT ?? 4173);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be a valid TCP port number.");
 }
@@ -269,14 +271,31 @@ const server = createServer(async (request, response) => {
 });
 
 server.on("error", (error) => {
+  if (
+    !server.listening &&
+    "code" in error &&
+    error.code === "EADDRINUSE" &&
+    port < 65535
+  ) {
+    const unavailablePort = port;
+    port += 1;
+    console.warn(
+      `Port ${unavailablePort} is already in use; trying ${port}.`,
+    );
+    server.listen(port, "127.0.0.1");
+    return;
+  }
+
   console.error("Could not start the dashboard server:", error);
   process.exitCode = 1;
 });
 
-server.listen(port, "127.0.0.1", () => {
+server.on("listening", () => {
   console.log(`MoneyGo dashboard: http://127.0.0.1:${port}`);
   console.log(
     `Using local statements: ${statementData.accounts.map((account) => account.name).join(", ")}`,
   );
   console.log("Press Ctrl+C to stop the server.");
 });
+
+server.listen(port, "127.0.0.1");

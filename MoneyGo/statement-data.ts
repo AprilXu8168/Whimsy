@@ -13,6 +13,7 @@ export type StatementTransaction = {
   balanceCents: number;
   description: string;
   isSpend: boolean;
+  isIncome: boolean;
 };
 
 export type StatementAccount = {
@@ -36,6 +37,11 @@ export type InternalTransfer = {
   amountCents: number;
   fromAccount: string;
   toAccount: string;
+};
+
+type TransferPair = {
+  outflow: StatementTransaction;
+  inflow: StatementTransaction;
 };
 
 const headerAliases = {
@@ -156,9 +162,9 @@ async function findCsvFiles(path: string): Promise<string[]> {
   return [...csvFiles, ...nestedFiles.flat()];
 }
 
-export function matchInternalTransfers(
+function findMatchedTransferPairs(
   transactions: readonly StatementTransaction[],
-): InternalTransfer[] {
+): TransferPair[] {
   const transferGroups = new Map<
     string,
     { outflows: StatementTransaction[]; inflows: StatementTransaction[] }
@@ -185,28 +191,41 @@ export function matchInternalTransfers(
     transferGroups.set(key, group);
   }
 
-  const matches: InternalTransfer[] = [];
+  const matches: TransferPair[] = [];
   for (const { outflows, inflows } of transferGroups.values()) {
     const usedInflows = new Set<number>();
     for (const outflow of outflows) {
       const inflowIndex = inflows.findIndex(
         (inflow, index) =>
-          !usedInflows.has(index) && inflow.account !== outflow.account,
+          !usedInflows.has(index) &&
+          inflow.account !== outflow.account &&
+          ((outflow.accountName.toLowerCase() === "card" &&
+            inflow.accountName.toLowerCase() === "savings") ||
+            (outflow.accountName.toLowerCase() === "savings" &&
+              inflow.accountName.toLowerCase() === "card")),
       );
       if (inflowIndex < 0) continue;
 
       const inflow = inflows[inflowIndex];
       usedInflows.add(inflowIndex);
-      matches.push({
-        date: outflow.date,
-        amountCents: Math.abs(outflow.amountCents),
-        fromAccount: outflow.accountName,
-        toAccount: inflow.accountName,
-      });
+      matches.push({ outflow, inflow });
     }
   }
 
-  return matches.sort((a, b) => a.date.localeCompare(b.date));
+  return matches.sort((a, b) =>
+    a.outflow.date.localeCompare(b.outflow.date),
+  );
+}
+
+export function matchInternalTransfers(
+  transactions: readonly StatementTransaction[],
+): InternalTransfer[] {
+  return findMatchedTransferPairs(transactions).map(({ outflow, inflow }) => ({
+    date: outflow.date,
+    amountCents: Math.abs(outflow.amountCents),
+    fromAccount: outflow.accountName,
+    toAccount: inflow.accountName,
+  }));
 }
 
 export async function readStatements(
@@ -258,7 +277,11 @@ export async function readStatements(
       .join("/");
     const parsedRows: Omit<
       StatementTransaction,
-      "account" | "accountName" | "accountNewestFirst" | "isSpend"
+      | "account"
+      | "accountName"
+      | "accountNewestFirst"
+      | "isSpend"
+      | "isIncome"
     >[] = [];
 
     for (let index = columns.firstDataRow; index < rows.length; index += 1) {
@@ -305,7 +328,6 @@ export async function readStatements(
 
     for (const transaction of parsedRows) {
       const isCardAccount = accountStem.toLowerCase() === "card";
-      const isInternalTransfer = /\btransfer\b/i.test(transaction.description);
       transactions.push({
         ...transaction,
         account: accountId,
@@ -313,10 +335,8 @@ export async function readStatements(
         accountNewestFirst,
         statementFile: filePath,
         sourceSequence: transaction.accountSequence,
-        isSpend:
-          isCardAccount &&
-          transaction.amountCents < 0 &&
-          !isInternalTransfer,
+        isSpend: isCardAccount && transaction.amountCents < 0,
+        isIncome: transaction.amountCents > 0,
       });
     }
   }
@@ -351,6 +371,13 @@ export async function readStatements(
     if (a.account !== b.account) return a.account.localeCompare(b.account);
     return a.accountSequence - b.accountSequence;
   });
+
+  for (const { outflow, inflow } of findMatchedTransferPairs(transactions)) {
+    outflow.isSpend = false;
+    outflow.isIncome = false;
+    inflow.isSpend = false;
+    inflow.isIncome = false;
+  }
 
   const publicTransactions: StatementTransaction[] = transactions.map(
     ({

@@ -54,11 +54,18 @@ test("loads all statement CSVs, counts card purchases, and sums account balances
   const spendingTransactions = statements.transactions.filter(
     (transaction) => transaction.isSpend,
   );
+  const incomeTransactions = statements.transactions.filter(
+    (transaction) => transaction.isIncome,
+  );
   const transfers = matchInternalTransfers(statements.transactions);
 
   assert.equal(statements.accounts.length, 2);
   assert.equal(statements.accounts.find((account) => account.id === "card")?.balanceCents, 9_000);
   assert.equal(combinedBalanceCents, 21_000);
+  assert.deepEqual(
+    incomeTransactions.map((transaction) => transaction.description),
+    ["Salary", "Deposit"],
+  );
   assert.deepEqual(
     spendingTransactions.map((transaction) => [
       transaction.accountName,
@@ -78,5 +85,46 @@ test("loads all statement CSVs, counts card purchases, and sums account balances
       transfer.toAccount,
     ]),
     [["2026-01-02", 2_000, "card", "savings"]],
+  );
+});
+
+test("excludes matched card-savings transfers but counts unmatched card transfers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "moneygo-transfers-"));
+  temporaryDirectories.push(root);
+  const statementsDirectory = join(root, "statements");
+  await mkdir(statementsDirectory, { recursive: true });
+
+  await writeFile(
+    join(statementsDirectory, "card.csv"),
+    [
+      '19/06/2026,"-2505.00","Transfer To Apx CommBank App House","+1537.09"',
+      '18/06/2026,"-50.00","Transfer to savings","4042.09"',
+    ].join("\n"),
+  );
+  await writeFile(
+    join(statementsDirectory, "savings.csv"),
+    '18/06/2026,"+50.00","Transfer from card","50.00"',
+  );
+
+  const statements = await readStatements(statementsDirectory);
+  const cardTransactions = statements.transactions.filter(
+    (transaction) => transaction.accountName === "card",
+  );
+
+  assert.deepEqual(
+    cardTransactions.map((transaction) => [
+      transaction.description,
+      transaction.isSpend,
+    ]),
+    [
+      ["Transfer to savings", false],
+      ["Transfer To Apx CommBank App House", true],
+    ],
+  );
+  assert.equal(
+    statements.transactions.find(
+      (transaction) => transaction.accountName === "savings",
+    )?.isIncome,
+    false,
   );
 });

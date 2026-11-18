@@ -1,21 +1,23 @@
 export const categoryRules = [
   {
     category: "Groceries",
-    keywords: ["BUNNINGS", "COLES", "SUPERMA"],
+    keywords: ["BUNNINGS", "COLES", "SUPERMA", "TARGET"],
   },
   {
-    category: "Debt",
-    keywords: ["ETHOS", "apx nab", "PLINEPH"],
+    category: "House",
+    keywords: ["apx nab", "House", "RATE"],
   },
   {
     category: "Dining",
-    keywords: [
-      "McDonalds",
-      "Dominos",
-      "TASTY KITCHEN",
-      "uber eats",
-      "uber *eats",
-    ],
+    keywords: ["McDonalds", "Dominos", "TASTY KITCHEN", "uber eats", "uber *eats",],
+  },
+  {
+    category: "Wellness",
+    keywords: ["DENTAL", "ICEWORLD", "ICE SKATING", "PLINEPH", "DR JAMES BARTON", "ETHOS"],
+  },
+  {
+    category: "OutOfPlan",
+    keywords: ["Debit Excess", "Overdraw Fee"],
   },
   {
     category: "Insurance",
@@ -23,7 +25,7 @@ export const categoryRules = [
   },
   {
     category: "Transport",
-    keywords: ["7 ELEVEN", "G-Force"],
+    keywords: ["7 ELEVEN", "G-Force", "TRANSLINK", "REGO"],
   },
   {
     category: "Bills",
@@ -31,7 +33,7 @@ export const categoryRules = [
   },
   {
     category: "Entertainment",
-    keywords: ["AMAZON", "Apple", "PET CIRCLE"],
+    keywords: ["AMAZON", "Apple", "PET CIRCLE", "SHEIN", "TEMU", "Daiso"],
   },
 ] as const;
 

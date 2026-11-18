@@ -38,6 +38,38 @@
         font-weight: 600;
       }
 
+      .period-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 12px;
+      }
+
+      .period-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 4px;
+        border-radius: 8px;
+        background: #e8edf1;
+      }
+
+      .period-tab {
+        padding: 8px 11px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: #344454;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .period-tab[aria-pressed="true"] {
+        background: white;
+        color: #17212b;
+        box-shadow: 0 1px 3px #17212b26;
+      }
+
       select {
         min-width: 190px;
         padding: 9px 12px;
@@ -68,14 +100,86 @@
         box-shadow: 0 2px 8px #17212b0a;
       }
 
+      #spending-section {
+        background: #eef5ff;
+      }
+
+      #balance-section {
+        background: #eff8f2;
+      }
+
+      #category-section {
+        background: #fff8e8;
+      }
+
+      #review-section {
+        background: #fff1f0;
+      }
+
+      #expenses-section {
+        background: #f5f0ff;
+      }
+
+      #income-section {
+        background: #edf8f7;
+      }
+
       .card h2 {
-        margin: 0 0 14px;
+        margin: 0 0 4px;
         font-size: 1.1rem;
+      }
+
+      .section-summary {
+        margin: 0 0 14px;
+        color: #465563;
+        font-weight: 600;
+      }
+
+      .section-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .section-actions button {
+        padding: 6px 10px;
+        border: 1px solid #aeb9c4;
+        border-radius: 6px;
+        background: white;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
       }
 
       .chart-wrap {
         position: relative;
         height: 320px;
+      }
+
+      .category-legend {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 8px 14px;
+        margin: 14px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .category-legend li {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        color: #17212b;
+        font-size: 0.95rem;
+      }
+
+      .category-color-swatch {
+        width: 12px;
+        height: 12px;
+        flex: 0 0 12px;
+        border-radius: 3px;
       }
 
       #status {
@@ -132,10 +236,46 @@
   <body>
     <header>
       <h1>MoneyGo spending</h1>
-      <label for="month-select">
-        Month and year
-        <select id="month-select"></select>
-      </label>
+      <div class="period-controls">
+        <div class="period-tabs" role="group" aria-label="Time period">
+          <button
+            class="period-tab"
+            type="button"
+            data-period-view="monthly"
+            aria-pressed="true"
+          >
+            Monthly
+          </button>
+          <button
+            class="period-tab"
+            type="button"
+            data-period-view="quarterly"
+            aria-pressed="false"
+          >
+            Quarterly
+          </button>
+          <button
+            class="period-tab"
+            type="button"
+            data-period-view="yearly"
+            aria-pressed="false"
+          >
+            Yearly
+          </button>
+          <button
+            class="period-tab"
+            type="button"
+            data-period-view="financial-year"
+            aria-pressed="false"
+          >
+            Financial year
+          </button>
+        </div>
+        <label for="period-select">
+          Period
+          <select id="period-select"></select>
+        </label>
+      </div>
     </header>
 
     <p class="privacy-note">
@@ -146,24 +286,129 @@
     <p id="status" role="status"></p>
 
     <main class="charts">
-      <section class="card" aria-labelledby="spending-title">
+      <section
+        id="spending-section"
+        class="card"
+        aria-labelledby="spending-title"
+      >
         <h2 id="spending-title">Daily spending</h2>
+        <p id="spending-summary" class="section-summary"></p>
         <div class="chart-wrap"><canvas id="spending-chart"></canvas></div>
       </section>
-      <section class="card" aria-labelledby="balance-title">
+      <section
+        id="balance-section"
+        class="card"
+        aria-labelledby="balance-title"
+      >
         <h2 id="balance-title">Daily closing balance</h2>
+        <p id="balance-section-summary" class="section-summary"></p>
         <div class="chart-wrap"><canvas id="balance-chart"></canvas></div>
       </section>
-      <section class="card" aria-labelledby="category-title">
+      <section
+        id="category-section"
+        class="card"
+        aria-labelledby="category-title"
+      >
         <h2 id="category-title">Spending by category</h2>
+        <p id="category-summary" class="section-summary"></p>
         <div class="chart-wrap"><canvas id="category-chart"></canvas></div>
+        <ul
+          id="category-legend"
+          class="category-legend"
+          aria-label="Category spending totals"
+        ></ul>
+        <p>Click a pie slice to show that category's expenses in the table.</p>
       </section>
     </main>
 
-    <section class="card" aria-labelledby="expenses-title">
+    <section id="review-section" class="card" aria-labelledby="review-title">
+      <h2 id="review-title">TODO: Review spending</h2>
+      <p id="review-summary" class="section-summary"></p>
+      <p>These expenses are marked Review in the selected time frame.</p>
+      <div class="section-actions">
+        <button
+          id="toggle-review-table"
+          type="button"
+          aria-controls="review-table-wrap"
+          aria-expanded="true"
+        >
+          Collapse table
+        </button>
+      </div>
+      <div id="review-table-wrap" class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Description</th>
+              <th scope="col">Spent</th>
+              <th scope="col">Category</th>
+            </tr>
+          </thead>
+          <tbody id="review-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section
+      id="income-section"
+      class="card"
+      aria-labelledby="income-title"
+    >
+      <h2 id="income-title">Income and credits</h2>
+      <p id="income-summary" class="section-summary"></p>
+      <p>Positive transactions from all accounts; transfers between accounts are excluded. Refunds and interest are included.</p>
+      <div class="section-actions">
+        <button
+          id="toggle-income-table"
+          type="button"
+          aria-controls="income-table-wrap"
+          aria-expanded="true"
+        >
+          Collapse table
+        </button>
+      </div>
+      <div id="income-table-wrap" class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Description</th>
+              <th scope="col">Received</th>
+            </tr>
+          </thead>
+          <tbody id="income-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section
+      id="expenses-section"
+      class="card"
+      aria-labelledby="expenses-title"
+    >
       <h2 id="expenses-title">Expenses and categories</h2>
+      <p id="expenses-summary" class="section-summary"></p>
       <p id="save-status" role="status"></p>
-      <div class="table-wrap">
+      <div class="section-actions">
+        <button
+          id="clear-expense-filter"
+          type="button"
+          aria-controls="expenses-table-wrap"
+          hidden
+        >
+          Show all expenses
+        </button>
+        <button
+          id="toggle-expenses-table"
+          type="button"
+          aria-controls="expenses-table-wrap"
+          aria-expanded="true"
+        >
+          Collapse table
+        </button>
+      </div>
+      <div id="expenses-table-wrap" class="table-wrap">
         <table>
           <thead>
             <tr>

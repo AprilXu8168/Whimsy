@@ -23,7 +23,7 @@ Press Ctrl+C in the terminal when you are done. If NetBank does not work in the 
 
 ## Categorize spending
 
-The categorizer reads all `.csv` files under `statements/` (including subfolders) in the headerless CommBank format (date, amount, description, balance). It counts negative transactions from card statements as spending, excludes transfers, and does not count transactions from other account files as spending. Other account files are still used to calculate the combined balance from each account's latest statement balance. Merchant keyword matching is case-insensitive. Unmatched card spending is marked `Review`; keyword rules are in `categories.ts`.
+The categorizer reads all `.csv` files under `statements/` (including subfolders) in the headerless CommBank format (date, amount, description, balance). It counts negative transactions from card statements as spending, except for transfers matched between the card and savings statements by same date and equal/opposite amount. Unmatched card debits containing “Transfer” remain eligible for spending. Other account transactions are not counted as spending, but are used to calculate the combined balance from each account's latest statement balance. Merchant keyword matching is case-insensitive. Unmatched card spending is marked `Review`; keyword rules are in `categories.ts`.
 
 Run it from this folder:
 
@@ -37,7 +37,7 @@ To use specific statement CSV files instead:
 npm run categorize:spends -- statements/card.csv statements/savings.csv
 ```
 
-The result is written to `spending_log.csv`. The command logs each processing step, lists transfers matched across accounts by same date and equal/opposite amount (counted once), reports card spend, and prints each ending balance plus the combined balance. Unpaired transfers remain excluded from spending but are not included in the matched-transfer total. Review transactions labeled `Review` and add merchant keywords to the rules as needed.
+The result is written to `spending_log.csv`. The command logs each processing step, lists matched card-to-savings transfers (excluded from spending), reports card spend, and prints each ending balance plus the combined balance. Unpaired transfer rows are not included in the matched-transfer total; unmatched card debits remain eligible for spending. Review transactions labeled `Review` and add merchant keywords to the rules as needed.
 
 ## View monthly charts
 
@@ -47,9 +47,11 @@ To refresh `spending_log.csv` from the statements folder and then start the dash
 npm start
 ```
 
-Manually downloaded CSVs in `statements/` are scanned each time `npm start` runs. Numbered copies such as `card.csv` and `card_1.csv` are treated as statements for the same account; the account balance comes from the newest transaction across those files. Open [http://127.0.0.1:4173](http://127.0.0.1:4173) in your browser. The month selector lists the months present in all statement files and initially selects the latest month with card spending. The dashboard shows spending from card statements (excluding transfers), daily combined closing balance, and a pie chart of card spending by category, with a consistent distinct color for each category.
+Click a slice in the category pie chart to filter the expenses table to that category. Click the selected slice again or choose **Show all expenses** to clear the filter. The TODO, income, and expenses tables each have a **Collapse table**/**Expand table** button.
 
-Use the category dropdown in the expenses table to change a spend's category. Changes are saved locally in the ignored `category-overrides.json` file, update the category chart, and are reused by the spending categorizer. The dashboard binds only to your computer and does not send statement data to an external service. Stop it with Ctrl+C. After adding or replacing a statement while the dashboard is running, restart with `npm start` and refresh the browser.
+Manually downloaded CSVs in `statements/` are scanned each time `npm start` runs. Numbered copies such as `card.csv` and `card_1.csv` are treated as statements for the same account; the account balance comes from the newest transaction across those files. Open the dashboard URL printed in the terminal (normally [http://127.0.0.1:4173](http://127.0.0.1:4173)). If that port is occupied, the server tries the next port. The dashboard has Monthly, Quarterly, Yearly, and Financial year views, and initially selects the latest month with card spending. Quarterly and Financial year periods follow the Australian July-June financial year; Yearly uses calendar years. Monthly charts group by day, and the longer periods group by month. The dashboard shows spending from card statements (excluding transfers), combined closing balances, a pie chart of spending by category with a visible color key and total for each category in the selected period (hover over a slice to see its percentage), and a separate table of positive credits from all accounts excluding transfers. Refunds and interest appear in the credits table. Data sections show their item counts and totals for the selected period.
+
+Use the category dropdown in either the TODO review list or the expenses table to change a spend's category. The TODO list follows the selected dashboard time frame, hides when no matching items remain, removes an item after its category is changed, and omits any `Value Date:` suffix from displayed descriptions. Changes are saved locally in the ignored `category-overrides.json` file, update the category chart, and are reused by the spending categorizer. The dashboard binds only to your computer and does not send statement data to an external service. Stop it with Ctrl+C. After adding or replacing a statement while the dashboard is running, restart with `npm start` and refresh the browser.
 
 To load specific statement CSV files:
 

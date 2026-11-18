@@ -57,7 +57,7 @@ for (const transfer of matchedTransfers) {
 }
 if (unmatchedTransferCount > 0) {
   console.log(
-    `  ${unmatchedTransferCount} transfer row(s) were unpaired; they remain excluded from spending and are not included in the matched-transfer total.`,
+    `  ${unmatchedTransferCount} transfer row(s) were unpaired; unmatched card debits remain eligible for spending.`,
   );
 }
 
