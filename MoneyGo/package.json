@@ -1,0 +1,23 @@
+{
+  "name": "moneygo-statement-downloader",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "download:statement": "tsx download-statement.ts",
+    "categorize:spends": "tsx categorize-spends.ts",
+    "dashboard": "tsx dashboard.ts",
+    "test": "tsx --test statement-data.test.ts categories.test.ts"
+  },
+  "dependencies": {
+    "chart.js": "^4.6.1",
+    "csv-parse": "^7.0.3",
+    "playwright": "^1.56.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

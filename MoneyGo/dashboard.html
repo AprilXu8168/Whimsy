@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MoneyGo spending dashboard</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, sans-serif;
+        color: #17212b;
+        background: #f4f7f9;
+      }
+
+      body {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.8rem;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-weight: 600;
+      }
+
+      select {
+        min-width: 190px;
+        padding: 9px 12px;
+        border: 1px solid #aeb9c4;
+        border-radius: 6px;
+        background: white;
+        color: inherit;
+        font: inherit;
+      }
+
+      .privacy-note {
+        margin: 0 0 18px;
+        color: #465563;
+      }
+
+      .charts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+        gap: 18px;
+      }
+
+      .card {
+        min-width: 0;
+        padding: 18px;
+        border: 1px solid #e0e6eb;
+        border-radius: 10px;
+        background: white;
+        box-shadow: 0 2px 8px #17212b0a;
+      }
+
+      .card h2 {
+        margin: 0 0 14px;
+        font-size: 1.1rem;
+      }
+
+      .chart-wrap {
+        position: relative;
+        height: 320px;
+      }
+
+      #status {
+        color: #9c2c2c;
+      }
+
+      #save-status {
+        min-height: 1.5em;
+        color: #236b4c;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+      }
+
+      th,
+      td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #e0e6eb;
+      }
+
+      th {
+        color: #465563;
+        font-size: 0.9rem;
+      }
+
+      .amount {
+        white-space: nowrap;
+      }
+
+      .category-select {
+        width: 100%;
+        min-width: 130px;
+        padding: 7px 8px;
+      }
+
+      @media (max-width: 520px) {
+        body {
+          padding: 16px;
+        }
+
+        .chart-wrap {
+          height: 260px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>MoneyGo spending</h1>
+      <label for="month-select">
+        Month and year
+        <select id="month-select"></select>
+      </label>
+    </header>
+
+    <p class="privacy-note">
+      This dashboard runs on this computer. Transaction data stays local and is
+      not sent to an external service.
+    </p>
+    <p id="balance-summary" aria-live="polite"></p>
+    <p id="status" role="status"></p>
+
+    <main class="charts">
+      <section class="card" aria-labelledby="spending-title">
+        <h2 id="spending-title">Daily spending</h2>
+        <div class="chart-wrap"><canvas id="spending-chart"></canvas></div>
+      </section>
+      <section class="card" aria-labelledby="balance-title">
+        <h2 id="balance-title">Daily closing balance</h2>
+        <div class="chart-wrap"><canvas id="balance-chart"></canvas></div>
+      </section>
+      <section class="card" aria-labelledby="category-title">
+        <h2 id="category-title">Spending by category</h2>
+        <div class="chart-wrap"><canvas id="category-chart"></canvas></div>
+      </section>
+    </main>
+
+    <section class="card" aria-labelledby="expenses-title">
+      <h2 id="expenses-title">Expenses and categories</h2>
+      <p id="save-status" role="status"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Description</th>
+              <th scope="col">Spent</th>
+              <th scope="col">Category</th>
+            </tr>
+          </thead>
+          <tbody id="expenses-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <script src="/dashboard.js" defer></script>
+  </body>
+</html>
