@@ -1,7 +1,7 @@
 export const categoryRules = [
   {
     category: "Groceries",
-    keywords: ["BUNNINGS", "COLES", "SUPERMA", "TARGET"],
+    keywords: ["BUNNINGS", "COLES", "SUPERMA", "TARGET", "OFFICEWORKS", "KMART"],
   },
   {
     category: "House",
@@ -17,7 +17,7 @@ export const categoryRules = [
   },
   {
     category: "OutOfPlan",
-    keywords: ["Debit Excess", "Overdraw Fee"],
+    keywords: ["Debit Excess", "Overdraw Fee", "SPER"],
   },
   {
     category: "Insurance",

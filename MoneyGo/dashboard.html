@@ -89,15 +89,33 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
         gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .dashboard-sections {
+        display: grid;
+        gap: 18px;
       }
 
       .card {
         min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
         padding: 18px;
         border: 1px solid #e0e6eb;
         border-radius: 10px;
         background: white;
         box-shadow: 0 2px 8px #17212b0a;
+      }
+
+      .charts .card {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .charts .chart-wrap {
+        flex: 1;
+        min-height: 320px;
       }
 
       #spending-section {
@@ -321,6 +339,7 @@
       </section>
     </main>
 
+    <div class="dashboard-sections">
     <section id="review-section" class="card" aria-labelledby="review-title">
       <h2 id="review-title">TODO: Review spending</h2>
       <p id="review-summary" class="section-summary"></p>
@@ -422,6 +441,7 @@
         </table>
       </div>
     </section>
+    </div>
 
     <script src="/dashboard.js" defer></script>
   </body>

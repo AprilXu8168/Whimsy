@@ -32,98 +32,76 @@ const currency = new Intl.NumberFormat("en-AU", {
   style: "currency",
   currency: "AUD",
 });
+
+function getRequiredElement<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) {
+    throw new Error(`Dashboard page is missing required element: ${selector}`);
+  }
+  return element;
+}
+
 const periodSelect =
-  document.querySelector<HTMLSelectElement>("#period-select");
+  getRequiredElement<HTMLSelectElement>("#period-select");
 const periodTabs = [
   ...document.querySelectorAll<HTMLButtonElement>("[data-period-view]"),
 ];
-const status = document.querySelector<HTMLParagraphElement>("#status");
-const saveStatus =
-  document.querySelector<HTMLParagraphElement>("#save-status");
-const balanceSummary =
-  document.querySelector<HTMLParagraphElement>("#balance-summary");
-const spendingTitle =
-  document.querySelector<HTMLHeadingElement>("#spending-title");
-const balanceTitle =
-  document.querySelector<HTMLHeadingElement>("#balance-title");
-const spendingSummary =
-  document.querySelector<HTMLParagraphElement>("#spending-summary");
-const balanceSectionSummary =
-  document.querySelector<HTMLParagraphElement>("#balance-section-summary");
-const categorySummary =
-  document.querySelector<HTMLParagraphElement>("#category-summary");
-const reviewSummary =
-  document.querySelector<HTMLParagraphElement>("#review-summary");
-const incomeSummary =
-  document.querySelector<HTMLParagraphElement>("#income-summary");
-const expensesSummary =
-  document.querySelector<HTMLParagraphElement>("#expenses-summary");
-const spendingCanvas =
-  document.querySelector<HTMLCanvasElement>("#spending-chart");
-const balanceCanvas =
-  document.querySelector<HTMLCanvasElement>("#balance-chart");
-const categoryCanvas =
-  document.querySelector<HTMLCanvasElement>("#category-chart");
-const categoryLegend =
-  document.querySelector<HTMLUListElement>("#category-legend");
-const expensesBody =
-  document.querySelector<HTMLTableSectionElement>("#expenses-body");
-const incomeBody =
-  document.querySelector<HTMLTableSectionElement>("#income-body");
-const incomeTableWrap =
-  document.querySelector<HTMLDivElement>("#income-table-wrap");
-const toggleIncomeTable =
-  document.querySelector<HTMLButtonElement>("#toggle-income-table");
-const expensesTitle =
-  document.querySelector<HTMLHeadingElement>("#expenses-title");
-const expensesTableWrap =
-  document.querySelector<HTMLDivElement>("#expenses-table-wrap");
-const toggleExpensesTable =
-  document.querySelector<HTMLButtonElement>("#toggle-expenses-table");
-const clearExpenseFilter =
-  document.querySelector<HTMLButtonElement>("#clear-expense-filter");
-const reviewBody =
-  document.querySelector<HTMLTableSectionElement>("#review-body");
-const reviewSection =
-  document.querySelector<HTMLElement>("#review-section");
-const reviewTableWrap =
-  document.querySelector<HTMLDivElement>("#review-table-wrap");
-const toggleReviewTable =
-  document.querySelector<HTMLButtonElement>("#toggle-review-table");
-
-if (
-  !periodSelect ||
-  periodTabs.length === 0 ||
-  !status ||
-  !saveStatus ||
-  !balanceSummary ||
-  !spendingTitle ||
-  !balanceTitle ||
-  !spendingSummary ||
-  !balanceSectionSummary ||
-  !categorySummary ||
-  !reviewSummary ||
-  !incomeSummary ||
-  !expensesSummary ||
-  !spendingCanvas ||
-  !balanceCanvas ||
-  !categoryCanvas ||
-  !categoryLegend ||
-  !expensesBody ||
-  !incomeBody ||
-  !incomeTableWrap ||
-  !toggleIncomeTable ||
-  !expensesTitle ||
-  !expensesTableWrap ||
-  !toggleExpensesTable ||
-  !clearExpenseFilter ||
-  !reviewBody ||
-  !reviewSection ||
-  !reviewTableWrap ||
-  !toggleReviewTable
-) {
-  throw new Error("Dashboard page is missing a required element.");
+if (periodTabs.length === 0) {
+  throw new Error("Dashboard page is missing required period tabs.");
 }
+const status = getRequiredElement<HTMLParagraphElement>("#status");
+const saveStatus =
+  getRequiredElement<HTMLParagraphElement>("#save-status");
+const balanceSummary =
+  getRequiredElement<HTMLParagraphElement>("#balance-summary");
+const spendingTitle =
+  getRequiredElement<HTMLHeadingElement>("#spending-title");
+const balanceTitle =
+  getRequiredElement<HTMLHeadingElement>("#balance-title");
+const spendingSummary =
+  getRequiredElement<HTMLParagraphElement>("#spending-summary");
+const balanceSectionSummary =
+  getRequiredElement<HTMLParagraphElement>("#balance-section-summary");
+const categorySummary =
+  getRequiredElement<HTMLParagraphElement>("#category-summary");
+const reviewSummary =
+  getRequiredElement<HTMLParagraphElement>("#review-summary");
+const incomeSummary =
+  getRequiredElement<HTMLParagraphElement>("#income-summary");
+const expensesSummary =
+  getRequiredElement<HTMLParagraphElement>("#expenses-summary");
+const spendingCanvas =
+  getRequiredElement<HTMLCanvasElement>("#spending-chart");
+const balanceCanvas =
+  getRequiredElement<HTMLCanvasElement>("#balance-chart");
+const categoryCanvas =
+  getRequiredElement<HTMLCanvasElement>("#category-chart");
+const categoryLegend =
+  getRequiredElement<HTMLUListElement>("#category-legend");
+const expensesBody =
+  getRequiredElement<HTMLTableSectionElement>("#expenses-body");
+const incomeBody =
+  getRequiredElement<HTMLTableSectionElement>("#income-body");
+const incomeTableWrap =
+  getRequiredElement<HTMLDivElement>("#income-table-wrap");
+const toggleIncomeTable =
+  getRequiredElement<HTMLButtonElement>("#toggle-income-table");
+const expensesTitle =
+  getRequiredElement<HTMLHeadingElement>("#expenses-title");
+const expensesTableWrap =
+  getRequiredElement<HTMLDivElement>("#expenses-table-wrap");
+const toggleExpensesTable =
+  getRequiredElement<HTMLButtonElement>("#toggle-expenses-table");
+const clearExpenseFilter =
+  getRequiredElement<HTMLButtonElement>("#clear-expense-filter");
+const reviewBody =
+  getRequiredElement<HTMLTableSectionElement>("#review-body");
+const reviewSection =
+  getRequiredElement<HTMLElement>("#review-section");
+const reviewTableWrap =
+  getRequiredElement<HTMLDivElement>("#review-table-wrap");
+const toggleReviewTable =
+  getRequiredElement<HTMLButtonElement>("#toggle-review-table");
 
 let allTransactions: Transaction[] = [];
 let accountCount = 0;
@@ -272,7 +250,9 @@ function chartOptions(
       tooltip: {
         callbacks: {
           label: (context) =>
-            `${context.dataset.label}: ${currency.format(context.parsed.y / 100)}`,
+            context.parsed.y == null
+              ? `${context.dataset.label}: unavailable`
+              : `${context.dataset.label}: ${currency.format(context.parsed.y / 100)}`,
         },
       },
     },
@@ -293,7 +273,6 @@ function chartOptions(
 
 function renderCategoryChart(period: DashboardPeriod): void {
   const totals = new Map(categoryNames.map((category) => [category, 0]));
-  let spendingCount = 0;
   let spendingTotalCents = 0;
 
   for (const transaction of allTransactions) {
@@ -303,7 +282,6 @@ function renderCategoryChart(period: DashboardPeriod): void {
       transaction.isSpend &&
       transaction.amountCents < 0
     ) {
-      spendingCount += 1;
       spendingTotalCents -= transaction.amountCents;
       totals.set(
         transaction.category,
@@ -313,16 +291,16 @@ function renderCategoryChart(period: DashboardPeriod): void {
     }
   }
 
-  categorySummary.textContent = formatSectionSummary(
-    spendingCount,
-    "expense",
-    "expenses",
-    "Total spent",
-    spendingTotalCents,
-  );
-
   const chartCategories = categoryNames.filter(
     (category) => (totals.get(category) ?? 0) > 0,
+  );
+
+  categorySummary.textContent = formatSectionSummary(
+    chartCategories.length,
+    "category",
+    "categories",
+    "Total spent",
+    spendingTotalCents,
   );
 
   categoryLegend.replaceChildren();
@@ -806,18 +784,22 @@ toggleExpensesTable.addEventListener("click", () => {
   setTableExpanded(
     expensesTableWrap,
     toggleExpensesTable,
-    expensesTableWrap.hidden,
+    Boolean(expensesTableWrap.hidden),
   );
 });
 toggleReviewTable.addEventListener("click", () => {
   setTableExpanded(
     reviewTableWrap,
     toggleReviewTable,
-    reviewTableWrap.hidden,
+    Boolean(reviewTableWrap.hidden),
   );
 });
 toggleIncomeTable.addEventListener("click", () => {
-  setTableExpanded(incomeTableWrap, toggleIncomeTable, incomeTableWrap.hidden);
+  setTableExpanded(
+    incomeTableWrap,
+    toggleIncomeTable,
+    Boolean(incomeTableWrap.hidden),
+  );
 });
 clearExpenseFilter.addEventListener("click", () => {
   selectedExpenseCategory = null;

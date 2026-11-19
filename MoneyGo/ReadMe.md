@@ -13,14 +13,6 @@ npm install
 npx playwright install chromium
 ```
 
-Then start the helper:
-
-```sh
-npm run download:statement
-```
-
-Press Ctrl+C in the terminal when you are done. If NetBank does not work in the automated browser, download the statement through your usual browser and save it in this folder instead.
-
 ## Categorize spending
 
 The categorizer reads all `.csv` files under `statements/` (including subfolders) in the headerless CommBank format (date, amount, description, balance). It counts negative transactions from card statements as spending, except for transfers matched between the card and savings statements by same date and equal/opposite amount. Unmatched card debits containing “Transfer” remain eligible for spending. Other account transactions are not counted as spending, but are used to calculate the combined balance from each account's latest statement balance. Merchant keyword matching is case-insensitive. Unmatched card spending is marked `Review`; keyword rules are in `categories.ts`.
