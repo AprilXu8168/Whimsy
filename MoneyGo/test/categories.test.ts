@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { categorizeDescription } from "./categories.js";
+import { categorizeDescription } from "../categories.js";
 
 test("category matching ignores merchant keyword capitalization", () => {
   assert.equal(

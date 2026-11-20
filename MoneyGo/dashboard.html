@@ -170,6 +170,16 @@
         cursor: pointer;
       }
 
+      .sort-button {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
       .chart-wrap {
         position: relative;
         height: 320px;
@@ -311,6 +321,7 @@
       >
         <h2 id="spending-title">Daily spending</h2>
         <p id="spending-summary" class="section-summary"></p>
+        <p>Click a daily bar or its date label to filter to that date. In longer periods, click a monthly bar or label to open that month.</p>
         <div class="chart-wrap"><canvas id="spending-chart"></canvas></div>
       </section>
       <section
@@ -358,9 +369,29 @@
         <table>
           <thead>
             <tr>
-              <th scope="col">Date</th>
+              <th scope="col" aria-sort="descending">
+                <button
+                  class="sort-button"
+                  type="button"
+                  data-sort-table="review"
+                  data-sort-key="date"
+                  data-sort-label="Date"
+                >
+                  Date
+                </button>
+              </th>
               <th scope="col">Description</th>
-              <th scope="col">Spent</th>
+              <th scope="col" aria-sort="none">
+                <button
+                  class="sort-button"
+                  type="button"
+                  data-sort-table="review"
+                  data-sort-key="amount"
+                  data-sort-label="Spent"
+                >
+                  Spent
+                </button>
+              </th>
               <th scope="col">Category</th>
             </tr>
           </thead>
@@ -391,9 +422,29 @@
         <table>
           <thead>
             <tr>
-              <th scope="col">Date</th>
+              <th scope="col" aria-sort="descending">
+                <button
+                  class="sort-button"
+                  type="button"
+                  data-sort-table="income"
+                  data-sort-key="date"
+                  data-sort-label="Date"
+                >
+                  Date
+                </button>
+              </th>
               <th scope="col">Description</th>
-              <th scope="col">Received</th>
+              <th scope="col" aria-sort="none">
+                <button
+                  class="sort-button"
+                  type="button"
+                  data-sort-table="income"
+                  data-sort-key="amount"
+                  data-sort-label="Received"
+                >
+                  Received
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody id="income-body"></tbody>
@@ -431,9 +482,29 @@
         <table>
           <thead>
             <tr>
-              <th scope="col">Date</th>
+              <th scope="col" aria-sort="descending">
+                <button
+                  class="sort-button"
+                  type="button"
+                  data-sort-table="expenses"
+                  data-sort-key="date"
+                  data-sort-label="Date"
+                >
+                  Date
+                </button>
+              </th>
               <th scope="col">Description</th>
-              <th scope="col">Spent</th>
+              <th scope="col" aria-sort="none">
+                <button
+                  class="sort-button"
+                  type="button"
+                  data-sort-table="expenses"
+                  data-sort-key="amount"
+                  data-sort-label="Spent"
+                >
+                  Spent
+                </button>
+              </th>
               <th scope="col">Category</th>
             </tr>
           </thead>

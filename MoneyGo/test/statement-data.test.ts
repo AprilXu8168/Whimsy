@@ -6,7 +6,7 @@ import { afterEach, test } from "node:test";
 import {
   matchInternalTransfers,
   readStatements,
-} from "./statement-data.js";
+} from "../statement-data.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -126,5 +126,40 @@ test("excludes matched card-savings transfers but counts unmatched card transfer
       (transaction) => transaction.accountName === "savings",
     )?.isIncome,
     false,
+  );
+});
+
+test("deduplicates repeated statement rows but keeps distinct same-day purchases", async () => {
+  const root = await mkdtemp(join(tmpdir(), "moneygo-duplicates-"));
+  temporaryDirectories.push(root);
+  const statementsDirectory = join(root, "statements");
+  await mkdir(statementsDirectory, { recursive: true });
+
+  await writeFile(
+    join(statementsDirectory, "card.csv"),
+    [
+      '03/01/2026,"-10.00","Coffee shop","80.00"',
+      '02/01/2026,"-10.00","Coffee shop","90.00"',
+      '02/01/2026,"-10.00","Coffee shop","80.00"',
+      '01/01/2026,"+100.00","Deposit","100.00"',
+    ].join("\n"),
+  );
+  await writeFile(
+    join(statementsDirectory, "card_1.csv"),
+    '02/01/2026,"-10.00","Coffee shop","90.00"',
+  );
+
+  const statements = await readStatements(statementsDirectory);
+  const cardSpending = statements.transactions.filter(
+    (transaction) => transaction.isSpend,
+  );
+
+  assert.equal(cardSpending.length, 3);
+  assert.equal(
+    cardSpending.reduce(
+      (total, transaction) => total + Math.abs(transaction.amountCents),
+      0,
+    ),
+    3_000,
   );
 });

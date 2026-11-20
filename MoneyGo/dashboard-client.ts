@@ -23,9 +23,17 @@ type Transaction = {
 };
 
 type TransactionResponse = {
+  revision: number;
+  refreshError: string | null;
   categories: Category[];
   accounts: { id: string; name: string; balanceCents: number }[];
   transactions: Transaction[];
+};
+
+type TableControls = {
+  sortButtons: HTMLButtonElement[];
+  sortBy: "date" | "amount";
+  sortDirection: "ascending" | "descending";
 };
 
 const currency = new Intl.NumberFormat("en-AU", {
@@ -39,6 +47,23 @@ function getRequiredElement<T extends Element>(selector: string): T {
     throw new Error(`Dashboard page is missing required element: ${selector}`);
   }
   return element;
+}
+
+function getTableControls(name: string): TableControls {
+  const sortButtons = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      `[data-sort-table="${name}"]`,
+    ),
+  ];
+  if (sortButtons.length === 0) {
+    throw new Error(`Dashboard is missing ${name} table sort buttons.`);
+  }
+
+  return {
+    sortButtons,
+    sortBy: "date",
+    sortDirection: "descending",
+  };
 }
 
 const periodSelect =
@@ -102,17 +127,22 @@ const reviewTableWrap =
   getRequiredElement<HTMLDivElement>("#review-table-wrap");
 const toggleReviewTable =
   getRequiredElement<HTMLButtonElement>("#toggle-review-table");
+const reviewTableControls = getTableControls("review");
+const incomeTableControls = getTableControls("income");
+const expensesTableControls = getTableControls("expenses");
 
 let allTransactions: Transaction[] = [];
 let accountCount = 0;
 let categoryNames: Category[] = [];
 let availableMonths: string[] = [];
+let dataRevision = 0;
 let currentPeriods: DashboardPeriod[] = [];
 let periodView: PeriodView = "monthly";
-let spendingChart: Chart | undefined;
-let balanceChart: Chart | undefined;
+let spendingChart: Chart<"bar", number[], string> | undefined;
+let balanceChart: Chart<"line", number[], string> | undefined;
 let categoryChart: Chart<"pie", number[], string> | undefined;
 let selectedExpenseCategory: Category | null = null;
+let selectedExpenseDate: string | null = null;
 
 const categoryColors: Record<Category, string> = {
   Groceries: "#2e7d32",
@@ -237,11 +267,11 @@ function periodChartData(period: DashboardPeriod): {
   return { labels, spending, balances };
 }
 
-function chartOptions(
+function chartOptions<T extends "bar" | "line">(
   beginAtZero: boolean,
   xAxisTitle: string,
-): ChartOptions<"bar" | "line"> {
-  return {
+): ChartOptions<T> {
+  const options: ChartOptions<"bar" | "line"> = {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { intersect: false, mode: "index" },
@@ -269,6 +299,7 @@ function chartOptions(
       },
     },
   };
+  return options as ChartOptions<T>;
 }
 
 function renderCategoryChart(period: DashboardPeriod): void {
@@ -393,6 +424,70 @@ function formatSectionSummary(
   return `${count} ${count === 1 ? singular : plural} | ${amountLabel}: ${currency.format(amountCents / 100)}`;
 }
 
+function sortTableTransactions(
+  transactions: Transaction[],
+  controls: TableControls,
+  amount: (transaction: Transaction) => number,
+): Transaction[] {
+  const direction = controls.sortDirection === "ascending" ? 1 : -1;
+  return [...transactions].sort((a, b) => {
+    const comparison =
+      controls.sortBy === "date"
+        ? a.date.localeCompare(b.date)
+        : amount(a) - amount(b);
+    return comparison * direction;
+  });
+}
+
+function updateSortButtons(controls: TableControls): void {
+  for (const button of controls.sortButtons) {
+    const key = button.dataset.sortKey;
+    if (key !== "date" && key !== "amount") {
+      throw new Error("Dashboard contains an invalid table sort key.");
+    }
+
+    const label = button.dataset.sortLabel ?? (key === "date" ? "Date" : "Amount");
+    const active = controls.sortBy === key;
+    button.textContent = active
+      ? `${label} (${controls.sortDirection})`
+      : label;
+    button.setAttribute(
+      "aria-label",
+      active ? `${label}, sorted ${controls.sortDirection}` : `Sort by ${label}`,
+    );
+    button.closest("th")?.setAttribute(
+      "aria-sort",
+      active ? controls.sortDirection : "none",
+    );
+  }
+}
+
+function bindTableControls(
+  controls: TableControls,
+  render: () => void,
+): void {
+  for (const button of controls.sortButtons) {
+    button.addEventListener("click", () => {
+      const key = button.dataset.sortKey;
+      if (key !== "date" && key !== "amount") {
+        throw new Error("Dashboard contains an invalid table sort key.");
+      }
+
+      if (controls.sortBy === key) {
+        controls.sortDirection =
+          controls.sortDirection === "ascending" ? "descending" : "ascending";
+      } else {
+        controls.sortBy = key;
+        controls.sortDirection = "descending";
+      }
+      updateSortButtons(controls);
+      render();
+    });
+  }
+
+  updateSortButtons(controls);
+}
+
 async function saveCategory(
   transaction: Transaction,
   select: HTMLSelectElement,
@@ -470,10 +565,14 @@ function createExpenseRow(
 }
 
 function renderExpenses(period: DashboardPeriod): void {
-  expensesTitle.textContent = selectedExpenseCategory
-    ? `Expenses and categories: ${selectedExpenseCategory}`
+  const activeFilters = [
+    selectedExpenseDate && formatTransactionDate(selectedExpenseDate),
+    selectedExpenseCategory,
+  ].filter((filter): filter is string => filter !== null);
+  expensesTitle.textContent = activeFilters.length
+    ? `Expenses and categories: ${activeFilters.join(" · ")}`
     : "Expenses and categories";
-  clearExpenseFilter.hidden = selectedExpenseCategory === null;
+  clearExpenseFilter.hidden = activeFilters.length === 0;
   const expenses = chronologicalTransactions(
     allTransactions.filter(
       (transaction) =>
@@ -481,16 +580,22 @@ function renderExpenses(period: DashboardPeriod): void {
         transaction.amountCents < 0 &&
         transaction.date >= period.startDate &&
         transaction.date < period.endDate &&
+        (!selectedExpenseDate || transaction.date === selectedExpenseDate) &&
         (!selectedExpenseCategory ||
           transaction.category === selectedExpenseCategory),
     ),
-  ).reverse();
-  const totalSpentCents = expenses.reduce(
+  );
+  const sortedExpenses = sortTableTransactions(
+    expenses,
+    expensesTableControls,
+    (transaction) => -transaction.amountCents,
+  );
+  const totalSpentCents = sortedExpenses.reduce(
     (total, transaction) => total - transaction.amountCents,
     0,
   );
   expensesSummary.textContent = formatSectionSummary(
-    expenses.length,
+    sortedExpenses.length,
     "expense",
     "expenses",
     "Total spent",
@@ -498,23 +603,23 @@ function renderExpenses(period: DashboardPeriod): void {
   );
 
   expensesBody.replaceChildren();
-  if (expenses.length === 0) {
+  if (sortedExpenses.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
     cell.colSpan = 4;
-    cell.textContent = "No expenses for this period.";
+    cell.textContent = "No expenses for this selection.";
     row.append(cell);
     expensesBody.append(row);
     return;
   }
 
-  for (const transaction of expenses) {
+  for (const transaction of sortedExpenses) {
     expensesBody.append(createExpenseRow(transaction));
   }
 }
 
 function renderIncome(period: DashboardPeriod): void {
-  const incomes = chronologicalTransactions(
+  const incomes = sortTableTransactions(
     allTransactions.filter(
       (transaction) =>
         transaction.isIncome &&
@@ -522,7 +627,9 @@ function renderIncome(period: DashboardPeriod): void {
         transaction.date >= period.startDate &&
         transaction.date < period.endDate,
     ),
-  ).reverse();
+    incomeTableControls,
+    (transaction) => transaction.amountCents,
+  );
   const totalIncomeCents = incomes.reduce(
     (total, transaction) => total + transaction.amountCents,
     0,
@@ -561,16 +668,19 @@ function renderIncome(period: DashboardPeriod): void {
 }
 
 function renderReviewTodos(period: DashboardPeriod): void {
-  const reviewTransactions = chronologicalTransactions(
-    allTransactions.filter(
-      (transaction) =>
-        transaction.isSpend &&
-        transaction.amountCents < 0 &&
-        transaction.category === "Review" &&
-        transaction.date >= period.startDate &&
-        transaction.date < period.endDate,
-    ),
-  ).reverse();
+  const periodReviewTransactions = allTransactions.filter(
+    (transaction) =>
+      transaction.isSpend &&
+      transaction.amountCents < 0 &&
+      transaction.category === "Review" &&
+      transaction.date >= period.startDate &&
+      transaction.date < period.endDate,
+  );
+  const reviewTransactions = sortTableTransactions(
+    periodReviewTransactions,
+    reviewTableControls,
+    (transaction) => -transaction.amountCents,
+  );
 
   const totalReviewCents = reviewTransactions.reduce(
     (total, transaction) => total - transaction.amountCents,
@@ -585,8 +695,14 @@ function renderReviewTodos(period: DashboardPeriod): void {
   );
 
   reviewBody.replaceChildren();
-  reviewSection.hidden = reviewTransactions.length === 0;
+  reviewSection.hidden = periodReviewTransactions.length === 0;
   if (reviewTransactions.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 4;
+    cell.textContent = "No review items for this period.";
+    row.append(cell);
+    reviewBody.append(row);
     return;
   }
 
@@ -663,7 +779,7 @@ function renderPeriod(): void {
   spendingChart?.destroy();
   balanceChart?.destroy();
 
-  spendingChart = new Chart(spendingCanvas, {
+  spendingChart = new Chart<"bar", number[], string>(spendingCanvas, {
     type: "bar",
     data: {
       labels,
@@ -676,10 +792,11 @@ function renderPeriod(): void {
         },
       ],
     },
-    options: chartOptions(true, axisTitle),
+    options: chartOptions<"bar">(true, axisTitle),
   });
+  spendingCanvas.style.cursor = "pointer";
 
-  balanceChart = new Chart(balanceCanvas, {
+  balanceChart = new Chart<"line", number[], string>(balanceCanvas, {
     type: "line",
     data: {
       labels,
@@ -695,7 +812,7 @@ function renderPeriod(): void {
         },
       ],
     },
-    options: chartOptions(false, axisTitle),
+    options: chartOptions<"line">(false, axisTitle),
   });
 
   renderCategoryChart(period);
@@ -705,7 +822,10 @@ function renderPeriod(): void {
   status.textContent = "";
 }
 
-function renderPeriodOptions(view: PeriodView): void {
+function renderPeriodOptions(
+  view: PeriodView,
+  preferredPeriodKey?: string,
+): void {
   periodView = view;
   currentPeriods = getPeriods(availableMonths, view);
   periodSelect.replaceChildren();
@@ -727,8 +847,112 @@ function renderPeriodOptions(view: PeriodView): void {
     throw new Error("The statement contains no months.");
   }
 
-  periodSelect.value = periodKeyForMonth(latestMonth, view);
+  periodSelect.value =
+    currentPeriods.find((period) => period.key === preferredPeriodKey)?.key ??
+    periodKeyForMonth(latestMonth, view);
   renderPeriod();
+}
+
+function nearestSpendingBarIndex(
+  event: MouseEvent,
+  chart: Chart<"bar", number[], string>,
+): number | undefined {
+  const bounds = spendingCanvas.getBoundingClientRect();
+  if (bounds.width === 0) return undefined;
+
+  const x = ((event.clientX - bounds.left) * chart.width) / bounds.width;
+  if (x < chart.chartArea.left || x > chart.chartArea.right) {
+    return undefined;
+  }
+
+  const bars = chart.getDatasetMeta(0).data;
+  let nearestIndex: number | undefined;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  bars.forEach((bar, index) => {
+    const distance = Math.abs(bar.x - x);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+  return nearestIndex;
+}
+
+function selectPeriodView(
+  view: PeriodView,
+  preferredPeriodKey?: string,
+): void {
+  selectedExpenseDate = null;
+  for (const tab of periodTabs) {
+    tab.setAttribute(
+      "aria-pressed",
+      String(tab.dataset.periodView === view),
+    );
+  }
+  renderPeriodOptions(view, preferredPeriodKey);
+}
+
+function applyTransactionResponse(
+  payload: TransactionResponse,
+  preferredPeriodKey?: string,
+): void {
+  allTransactions = payload.transactions;
+  accountCount = payload.accounts.length;
+  categoryNames = payload.categories;
+  dataRevision = payload.revision;
+
+  const combinedBalanceCents = payload.accounts.reduce(
+    (total, account) => total + account.balanceCents,
+    0,
+  );
+  balanceSummary.textContent =
+    `Combined balance (${payload.accounts.length} accounts): ` +
+    currency.format(combinedBalanceCents / 100);
+  availableMonths = [
+    ...new Set(
+      allTransactions.map((transaction) => transaction.date.slice(0, 7)),
+    ),
+  ].sort();
+
+  if (availableMonths.length === 0) {
+    throw new Error("The statement contains no transactions.");
+  }
+
+  renderPeriodOptions(periodView, preferredPeriodKey);
+}
+
+let checkingForUpdates = false;
+
+async function checkForStatementUpdates(): Promise<void> {
+  if (checkingForUpdates) return;
+  checkingForUpdates = true;
+
+  try {
+    const response = await fetch("/api/transactions");
+    if (!response.ok) {
+      throw new Error("Could not check for statement updates.");
+    }
+
+    const payload = (await response.json()) as TransactionResponse;
+    const hasChanged = payload.revision !== dataRevision;
+    if (hasChanged) {
+      applyTransactionResponse(payload, periodSelect.value);
+    }
+
+    if (payload.refreshError) {
+      status.textContent =
+        `Could not reload changed statements: ${payload.refreshError}`;
+    } else if (hasChanged) {
+      status.textContent = "Statement data refreshed.";
+    }
+  } catch (error) {
+    status.textContent =
+      error instanceof Error
+        ? error.message
+        : "Could not check for statement updates.";
+  } finally {
+    checkingForUpdates = false;
+  }
 }
 
 async function start(): Promise<void> {
@@ -739,41 +963,33 @@ async function start(): Promise<void> {
     }
 
     const payload = (await response.json()) as TransactionResponse;
-    allTransactions = payload.transactions;
-    accountCount = payload.accounts.length;
-    categoryNames = payload.categories;
-    const combinedBalanceCents = payload.accounts.reduce(
-      (total, account) => total + account.balanceCents,
-      0,
-    );
-    balanceSummary.textContent =
-      `Combined balance (${payload.accounts.length} accounts): ` +
-      currency.format(combinedBalanceCents / 100);
-    availableMonths = [
-      ...new Set(
-        allTransactions.map((transaction) => transaction.date.slice(0, 7)),
-      ),
-    ].sort();
-
-    if (availableMonths.length === 0) {
-      throw new Error("The statement contains no transactions.");
-    }
-
-    periodSelect.addEventListener("change", renderPeriod);
+    periodSelect.addEventListener("change", () => {
+      selectedExpenseDate = null;
+      renderPeriod();
+    });
     for (const button of periodTabs) {
       button.addEventListener("click", () => {
         const view = button.dataset.periodView;
         if (!isPeriodView(view)) {
           throw new Error("Dashboard contains an invalid period tab.");
         }
-        for (const tab of periodTabs) {
-          tab.setAttribute("aria-pressed", String(tab === button));
-        }
-        renderPeriodOptions(view);
+        selectPeriodView(view);
       });
     }
 
-    renderPeriodOptions(periodView);
+    applyTransactionResponse(payload);
+    bindTableControls(reviewTableControls, () =>
+      renderReviewTodos(getSelectedPeriod()),
+    );
+    bindTableControls(incomeTableControls, () =>
+      renderIncome(getSelectedPeriod()),
+    );
+    bindTableControls(expensesTableControls, () =>
+      renderExpenses(getSelectedPeriod()),
+    );
+    window.setInterval(() => {
+      void checkForStatementUpdates();
+    }, 3000);
   } catch (error) {
     status.textContent =
       error instanceof Error ? error.message : "Could not load dashboard.";
@@ -803,7 +1019,33 @@ toggleIncomeTable.addEventListener("click", () => {
 });
 clearExpenseFilter.addEventListener("click", () => {
   selectedExpenseCategory = null;
+  selectedExpenseDate = null;
   renderExpenses(getSelectedPeriod());
+});
+
+spendingCanvas.addEventListener("click", (event) => {
+  const chart = spendingChart;
+  if (!chart) return;
+
+  const index = nearestSpendingBarIndex(event, chart);
+  if (index === undefined) return;
+
+  const period = getSelectedPeriod();
+  if (period.view === "monthly") {
+    const month = period.bucketMonths[0];
+    const day = String(index + 1).padStart(2, "0");
+    selectedExpenseDate = `${month}-${day}`;
+    selectedExpenseCategory = null;
+    renderExpenses(period);
+    setTableExpanded(expensesTableWrap, toggleExpensesTable, true);
+    expensesTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
+  const month = period.bucketMonths[index];
+  if (!month || !availableMonths.includes(month)) return;
+  selectedExpenseCategory = null;
+  selectPeriodView("monthly", month);
 });
 
 void start();

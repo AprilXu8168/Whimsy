@@ -1,6 +1,7 @@
+import { watch } from "node:fs";
 import { createServer } from "node:http";
-import { readFile, rename, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, rename, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import {
@@ -10,7 +11,10 @@ import {
   type Category,
 } from "./categories.js";
 import { loadCategoryOverrides } from "./category-overrides.js";
-import { readStatements } from "./statement-data.js";
+import {
+  readStatements,
+  type StatementData,
+} from "./statement-data.js";
 import { transactionId } from "./transaction-id.js";
 
 type Transaction = {
@@ -56,53 +60,110 @@ async function readJsonBody(request: AsyncIterable<Buffer | string>): Promise<un
   return JSON.parse(chunks.join(""));
 }
 
-const statementData = await readStatements(
-  statementsDirectory,
-  process.argv.slice(2),
-);
-const duplicateCounts = new Map<string, number>();
-const transactions: Transaction[] = statementData.transactions.map(
-  (statementTransaction) => {
-    const transactionKey = JSON.stringify([
-      statementTransaction.account,
-      statementTransaction.sourceDate,
-      statementTransaction.amountCents,
-      statementTransaction.description,
-    ]);
-    const duplicateIndex = duplicateCounts.get(transactionKey) ?? 0;
-    duplicateCounts.set(transactionKey, duplicateIndex + 1);
-    const id = transactionId(
-      statementTransaction.sourceDate,
-      statementTransaction.amountCents,
-      statementTransaction.description,
-      duplicateIndex,
-    );
+const inputPaths = process.argv.slice(2);
+let statementData: StatementData;
+let transactions: Transaction[] = [];
+let transactionsById = new Map<string, Transaction>();
+let categoryOverrides: Record<string, Category> = {};
+let dataVersion = 0;
+let statementReloadError: string | null = null;
 
-    return {
-      id,
-      account: statementTransaction.account,
-      accountNewestFirst: statementTransaction.accountNewestFirst,
-      accountSequence: statementTransaction.accountSequence,
-      date: statementTransaction.date,
-      amountCents: statementTransaction.amountCents,
-      balanceCents: statementTransaction.balanceCents,
-      description: statementTransaction.description,
-      category: categorizeDescription(statementTransaction.description),
-      isSpend: statementTransaction.isSpend,
-      isIncome: statementTransaction.isIncome,
-    };
-  },
-);
+async function reloadDashboardData(): Promise<void> {
+  const nextStatementData = await readStatements(statementsDirectory, inputPaths);
+  const nextCategoryOverrides = await loadCategoryOverrides(
+    categoryOverridesPath,
+  );
+  const duplicateCounts = new Map<string, number>();
+  const nextTransactions: Transaction[] = nextStatementData.transactions.map(
+    (statementTransaction) => {
+      const transactionKey = JSON.stringify([
+        statementTransaction.account,
+        statementTransaction.sourceDate,
+        statementTransaction.amountCents,
+        statementTransaction.description,
+      ]);
+      const duplicateIndex = duplicateCounts.get(transactionKey) ?? 0;
+      duplicateCounts.set(transactionKey, duplicateIndex + 1);
+      const id = transactionId(
+        statementTransaction.sourceDate,
+        statementTransaction.amountCents,
+        statementTransaction.description,
+        duplicateIndex,
+      );
 
-const categoryOverrides = await loadCategoryOverrides(categoryOverridesPath);
-for (const transaction of transactions) {
-  const override = categoryOverrides[transaction.id];
-  if (override) transaction.category = override;
+      return {
+        id,
+        account: statementTransaction.account,
+        accountNewestFirst: statementTransaction.accountNewestFirst,
+        accountSequence: statementTransaction.accountSequence,
+        date: statementTransaction.date,
+        amountCents: statementTransaction.amountCents,
+        balanceCents: statementTransaction.balanceCents,
+        description: statementTransaction.description,
+        category:
+          nextCategoryOverrides[id] ??
+          categorizeDescription(statementTransaction.description),
+        isSpend: statementTransaction.isSpend,
+        isIncome: statementTransaction.isIncome,
+      };
+    },
+  );
+
+  statementData = nextStatementData;
+  transactions = nextTransactions;
+  transactionsById = new Map(
+    nextTransactions.map((transaction) => [transaction.id, transaction]),
+  );
+  categoryOverrides = nextCategoryOverrides;
+  dataVersion += 1;
 }
 
-const transactionsById = new Map(
-  transactions.map((transaction) => [transaction.id, transaction]),
-);
+await reloadDashboardData();
+
+let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+let reloadQueue: Promise<void> = Promise.resolve();
+
+function scheduleDashboardReload(): void {
+  if (reloadTimer) clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => {
+    reloadTimer = undefined;
+    reloadQueue = reloadQueue.then(async () => {
+      try {
+        await reloadDashboardData();
+        statementReloadError = null;
+        console.log("Reloaded dashboard data after a statement change.");
+      } catch (error) {
+        statementReloadError =
+          error instanceof Error ? error.message : String(error);
+        console.error("Could not reload changed statements:", error);
+      }
+    });
+  }, 250);
+}
+
+const watchPaths = new Set<string>();
+if (inputPaths.length === 0) {
+  watchPaths.add(statementsDirectory);
+} else {
+  for (const inputPath of inputPaths) {
+    const resolvedPath = resolve(inputPath);
+    const pathInfo = await stat(resolvedPath);
+    watchPaths.add(
+      pathInfo.isDirectory() ? resolvedPath : dirname(resolvedPath),
+    );
+  }
+}
+const statementWatchers = [...watchPaths].map((path) => {
+  const watcher = watch(path, { recursive: true }, () => {
+    scheduleDashboardReload();
+  });
+  watcher.on("error", (error) => {
+    statementReloadError = error.message;
+    console.error(`Could not watch statement path "${path}":`, error);
+  });
+  return watcher;
+});
+
 let port = Number(process.env.PORT ?? 4173);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be a valid TCP port number.");
@@ -191,6 +252,8 @@ const server = createServer(async (request, response) => {
       });
       response.end(
         JSON.stringify({
+          revision: dataVersion,
+          refreshError: statementReloadError,
           categories,
           accounts: statementData.accounts,
           transactions,
@@ -295,7 +358,13 @@ server.on("listening", () => {
   console.log(
     `Using local statements: ${statementData.accounts.map((account) => account.name).join(", ")}`,
   );
+  console.log("Watching statement files for changes.");
   console.log("Press Ctrl+C to stop the server.");
+});
+
+server.on("close", () => {
+  if (reloadTimer) clearTimeout(reloadTimer);
+  for (const watcher of statementWatchers) watcher.close();
 });
 
 server.listen(port, "0.0.0.0");

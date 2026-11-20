@@ -341,8 +341,22 @@ export async function readStatements(
     }
   }
 
+  const seenTransactionKeys = new Set<string>();
+  const uniqueTransactions = transactions.filter((transaction) => {
+    const key = JSON.stringify([
+      transaction.account,
+      transaction.date,
+      transaction.amountCents,
+      transaction.description,
+      transaction.balanceCents,
+    ]);
+    if (seenTransactionKeys.has(key)) return false;
+    seenTransactionKeys.add(key);
+    return true;
+  });
+
   const transactionsByAccount = new Map<string, ParsedStatementTransaction[]>();
-  for (const transaction of transactions) {
+  for (const transaction of uniqueTransactions) {
     const accountTransactions =
       transactionsByAccount.get(transaction.account) ?? [];
     accountTransactions.push(transaction);
@@ -365,21 +379,23 @@ export async function readStatements(
     });
   }
 
-  transactions.sort((a, b) => {
+  uniqueTransactions.sort((a, b) => {
     const dateOrder = a.date.localeCompare(b.date);
     if (dateOrder !== 0) return dateOrder;
     if (a.account !== b.account) return a.account.localeCompare(b.account);
     return a.accountSequence - b.accountSequence;
   });
 
-  for (const { outflow, inflow } of findMatchedTransferPairs(transactions)) {
+  for (const { outflow, inflow } of findMatchedTransferPairs(
+    uniqueTransactions,
+  )) {
     outflow.isSpend = false;
     outflow.isIncome = false;
     inflow.isSpend = false;
     inflow.isIncome = false;
   }
 
-  const publicTransactions: StatementTransaction[] = transactions.map(
+  const publicTransactions: StatementTransaction[] = uniqueTransactions.map(
     ({
       statementFile: _statementFile,
       sourceSequence: _sourceSequence,

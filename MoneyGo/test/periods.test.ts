@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getPeriods, periodKeyForMonth } from "./periods.js";
+import { getPeriods, periodKeyForMonth } from "../periods.js";
 
 test("groups quarters using Australian financial-year boundaries", () => {
   assert.equal(periodKeyForMonth("2026-09", "quarterly"), "2026-Q1");
