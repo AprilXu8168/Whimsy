@@ -96,6 +96,69 @@ test("reloads the transaction API when a watched statement changes", async (t) =
   }
 
   const initial = await waitForData((data) => data.revision > 0);
+  const categoryRulesResponse = await fetch(
+    `http://127.0.0.1:${port}/api/category-rules`,
+  );
+  assert.equal(categoryRulesResponse.status, 200);
+  const categoryRulesPayload = (await categoryRulesResponse.json()) as {
+    rules: { category: string; keywords: string[] }[];
+  };
+  assert.ok(
+    categoryRulesPayload.rules.some((rule) => rule.category === "Groceries"),
+  );
+
+  const invalidCategoryRulesResponse = await fetch(
+    `http://127.0.0.1:${port}/api/category-rules`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ rules: [] }),
+    },
+  );
+  assert.equal(invalidCategoryRulesResponse.status, 400);
+
+  const settingsResponse = await fetch(`http://127.0.0.1:${port}/settings`);
+  assert.equal(settingsResponse.status, 200);
+  const settingsHtml = await settingsResponse.text();
+  assert.match(settingsHtml, /Upload a statement/);
+  assert.match(settingsHtml, /Category rules/);
+
+  const settingsScriptResponse = await fetch(
+    `http://127.0.0.1:${port}/settings.js`,
+  );
+  assert.equal(settingsScriptResponse.status, 200);
+  assert.match(
+    settingsScriptResponse.headers.get("content-type") ?? "",
+    /javascript/,
+  );
+
+  const crossOriginUpload = await fetch(
+    `http://127.0.0.1:${port}/api/statements/card`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "text/csv",
+        origin: "http://untrusted.example",
+      },
+      body: '01/01/2026,"-10.00","Test","90.00"\n',
+    },
+  );
+  assert.equal(crossOriginUpload.status, 403);
+
+  const invalidUpload = await fetch(
+    `http://127.0.0.1:${port}/api/statements/card`,
+    {
+      method: "POST",
+      headers: { "content-type": "text/csv" },
+      body: "not a valid statement",
+    },
+  );
+  assert.equal(invalidUpload.status, 400);
+  assert.match(
+    ((await invalidUpload.json()) as { error: string }).error,
+    /valid statement CSV/,
+  );
+
   await writeFile(
     statementPath,
     [

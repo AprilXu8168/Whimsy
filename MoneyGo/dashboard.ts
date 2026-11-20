@@ -6,15 +6,26 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import {
   categories,
-  categorizeDescription,
   isCategory,
   type Category,
 } from "./categories.js";
+import {
+  categorizeDescription,
+  InvalidCategoryRulesError,
+  loadCategoryRules,
+  saveCategoryRules,
+  type CategoryRule,
+} from "./category-rules.js";
 import { loadCategoryOverrides } from "./category-overrides.js";
 import {
   readStatements,
   type StatementData,
 } from "./statement-data.js";
+import {
+  InvalidStatementUploadError,
+  saveStatementUpload,
+  type StatementAccountType,
+} from "./statement-upload.js";
 import { transactionId } from "./transaction-id.js";
 
 type Transaction = {
@@ -34,24 +45,30 @@ type Transaction = {
 const scriptDirectory = fileURLToPath(new URL(".", import.meta.url));
 const statementsDirectory = join(scriptDirectory, "statements");
 const dashboardPath = join(scriptDirectory, "dashboard.html");
+const settingsPath = join(scriptDirectory, "settings.html");
 const categoryOverridesPath = join(
   scriptDirectory,
   "category-overrides.json",
 );
+const categoryRulesPath = join(scriptDirectory, "category-rules.json");
 const temporaryOverridesPath = `${categoryOverridesPath}.tmp`;
+const maximumStatementUploadBytes = 10 * 1024 * 1024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function readJsonBody(request: AsyncIterable<Buffer | string>): Promise<unknown> {
+async function readJsonBody(
+  request: AsyncIterable<Buffer | string>,
+  maximumBytes = 4096,
+): Promise<unknown> {
   const chunks: string[] = [];
   let length = 0;
 
   for await (const chunk of request) {
     const text = chunk.toString();
     length += Buffer.byteLength(text);
-    if (length > 4096) {
+    if (length > maximumBytes) {
       throw new Error("Request body is too large.");
     }
     chunks.push(text);
@@ -60,11 +77,42 @@ async function readJsonBody(request: AsyncIterable<Buffer | string>): Promise<un
   return JSON.parse(chunks.join(""));
 }
 
+class UploadTooLargeError extends Error {}
+
+async function readStatementUpload(
+  request: AsyncIterable<Buffer | string>,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let length = 0;
+
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    length += buffer.length;
+    if (length > maximumStatementUploadBytes) {
+      throw new UploadTooLargeError("Statement upload exceeds the 10 MB limit.");
+    }
+    chunks.push(buffer);
+  }
+
+  if (length === 0) {
+    throw new Error("The uploaded statement is empty.");
+  }
+  return Buffer.concat(chunks, length);
+}
+
+function isSameOrigin(request: {
+  headers: { origin?: string; host?: string };
+}): boolean {
+  const { origin, host } = request.headers;
+  return !origin || (!!host && origin === `http://${host}`);
+}
+
 const inputPaths = process.argv.slice(2);
 let statementData: StatementData;
 let transactions: Transaction[] = [];
 let transactionsById = new Map<string, Transaction>();
 let categoryOverrides: Record<string, Category> = {};
+let categoryRules: CategoryRule[] = [];
 let dataVersion = 0;
 let statementReloadError: string | null = null;
 
@@ -102,7 +150,7 @@ async function reloadDashboardData(): Promise<void> {
         description: statementTransaction.description,
         category:
           nextCategoryOverrides[id] ??
-          categorizeDescription(statementTransaction.description),
+          categorizeDescription(statementTransaction.description, categoryRules),
         isSpend: statementTransaction.isSpend,
         isIncome: statementTransaction.isIncome,
       };
@@ -118,6 +166,7 @@ async function reloadDashboardData(): Promise<void> {
   dataVersion += 1;
 }
 
+categoryRules = await loadCategoryRules(categoryRulesPath);
 await reloadDashboardData();
 
 let reloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -169,6 +218,44 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be a valid TCP port number.");
 }
 let categorySaveQueue: Promise<void> = Promise.resolve();
+let categoryRulesSaveQueue: Promise<void> = Promise.resolve();
+let statementUploadQueue: Promise<void> = Promise.resolve();
+
+function queueStatementUpload(
+  account: StatementAccountType,
+  contents: Buffer,
+): Promise<string> {
+  const operation = statementUploadQueue.then(() =>
+    saveStatementUpload(statementsDirectory, account, contents),
+  );
+  statementUploadQueue = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return operation;
+}
+
+function queueCategoryRulesSave(value: unknown): Promise<CategoryRule[]> {
+  const operation = categoryRulesSaveQueue.then(async () => {
+    const rules = await saveCategoryRules(categoryRulesPath, value);
+    categoryRules = rules;
+    for (const transaction of transactions) {
+      if (categoryOverrides[transaction.id] === undefined) {
+        transaction.category = categorizeDescription(
+          transaction.description,
+          rules,
+        );
+      }
+    }
+    dataVersion += 1;
+    return rules;
+  });
+  categoryRulesSaveQueue = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return operation;
+}
 
 function saveCategoryOverride(
   transaction: Transaction,
@@ -192,7 +279,10 @@ function saveCategoryOverride(
         transaction.category = previous;
       } else {
         delete categoryOverrides[transaction.id];
-        transaction.category = categorizeDescription(transaction.description);
+        transaction.category = categorizeDescription(
+          transaction.description,
+          categoryRules,
+        );
       }
       throw error;
     }
@@ -218,6 +308,20 @@ if (!dashboardScript) {
   throw new Error("Could not compile the dashboard TypeScript.");
 }
 
+const settingsBundle = await build({
+  entryPoints: [join(scriptDirectory, "settings-client.ts")],
+  bundle: true,
+  format: "iife",
+  target: "es2022",
+  write: false,
+  minify: true,
+});
+const settingsScript = settingsBundle.outputFiles[0]?.contents;
+
+if (!settingsScript) {
+  throw new Error("Could not compile the settings TypeScript.");
+}
+
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url ?? "/", "http://0.0.0.0").pathname;
 
@@ -234,6 +338,18 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (pathname === "/settings" || pathname === "/settings.html") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "content-security-policy":
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      });
+      response.end(await readFile(settingsPath));
+      return;
+    }
+
     if (pathname === "/dashboard.js") {
       response.writeHead(200, {
         "content-type": "text/javascript; charset=utf-8",
@@ -241,6 +357,86 @@ const server = createServer(async (request, response) => {
         "x-content-type-options": "nosniff",
       });
       response.end(dashboardScript);
+      return;
+    }
+
+    if (pathname === "/settings.js") {
+      response.writeHead(200, {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      });
+      response.end(settingsScript);
+      return;
+    }
+
+    const uploadRoute = /^\/api\/statements\/(card|savings)$/.exec(pathname);
+    const uploadAccount = uploadRoute?.[1];
+    if (uploadAccount === "card" || uploadAccount === "savings") {
+      if (request.method !== "POST") {
+        response.writeHead(405, { allow: "POST" });
+        response.end();
+        return;
+      }
+      if (!isSameOrigin(request)) {
+        response.writeHead(403);
+        response.end();
+        return;
+      }
+      if (
+        request.headers["content-type"]?.split(";")[0].trim() !== "text/csv"
+      ) {
+        response.writeHead(415, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        response.end(JSON.stringify({ error: "Upload a CSV file." }));
+        return;
+      }
+
+      let contents: Buffer;
+      try {
+        contents = await readStatementUpload(request);
+      } catch (error) {
+        const tooLarge = error instanceof UploadTooLargeError;
+        response.writeHead(tooLarge ? 413 : 400, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        response.end(
+          JSON.stringify({
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not read the uploaded statement.",
+          }),
+        );
+        return;
+      }
+
+      try {
+        const fileName = await queueStatementUpload(uploadAccount, contents);
+        response.writeHead(201, {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+        });
+        response.end(JSON.stringify({ account: uploadAccount, fileName }));
+      } catch (error) {
+        const invalidUpload = error instanceof InvalidStatementUploadError;
+        if (!invalidUpload) {
+          console.error("Could not save uploaded statement:", error);
+        }
+        response.writeHead(invalidUpload ? 400 : 500, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        response.end(
+          JSON.stringify({
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not save the uploaded statement.",
+          }),
+        );
+      }
       return;
     }
 
@@ -262,6 +458,85 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (pathname === "/api/category-rules") {
+      if (request.method === "GET") {
+        response.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+        });
+        response.end(JSON.stringify({ rules: categoryRules }));
+        return;
+      }
+
+      if (request.method !== "POST") {
+        response.writeHead(405, { allow: "GET, POST" });
+        response.end();
+        return;
+      }
+      if (!isSameOrigin(request)) {
+        response.writeHead(403);
+        response.end();
+        return;
+      }
+      if (!request.headers["content-type"]?.startsWith("application/json")) {
+        response.writeHead(415);
+        response.end();
+        return;
+      }
+
+      let payload: unknown;
+      try {
+        payload = await readJsonBody(request, 256 * 1024);
+      } catch (error) {
+        response.writeHead(400, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        response.end(
+          JSON.stringify({
+            error:
+              error instanceof Error ? error.message : "Invalid category rules.",
+          }),
+        );
+        return;
+      }
+
+      if (!isRecord(payload) || !Array.isArray(payload.rules)) {
+        response.writeHead(400, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        response.end(JSON.stringify({ error: "Invalid category rules." }));
+        return;
+      }
+
+      try {
+        const rules = await queueCategoryRulesSave(payload.rules);
+        response.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+        });
+        response.end(JSON.stringify({ rules }));
+      } catch (error) {
+        const invalidRules = error instanceof InvalidCategoryRulesError;
+        if (!invalidRules) {
+          console.error("Could not save category rules:", error);
+        }
+        response.writeHead(invalidRules ? 400 : 500, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        response.end(
+          JSON.stringify({
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not save category rules.",
+          }),
+        );
+      }
+      return;
+    }
+
     if (pathname === "/api/categories") {
       if (request.method !== "POST") {
         response.writeHead(405, { allow: "POST" });
@@ -269,12 +544,7 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      const origin = request.headers.origin;
-      if (
-        origin &&
-        origin !== `http://0.0.0.0:${port}` &&
-        origin !== `http://localhost:${port}`
-      ) {
+      if (!isSameOrigin(request)) {
         response.writeHead(403);
         response.end();
         return;

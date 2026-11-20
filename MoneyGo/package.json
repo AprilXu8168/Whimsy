@@ -7,7 +7,7 @@
     "download:statement": "tsx download-statement.ts",
     "categorize:spends": "tsx categorize-spends.ts",
     "dashboard": "tsx dashboard.ts",
-    "test": "tsx --test test/statement-data.test.ts test/categories.test.ts test/periods.test.ts test/dashboard-live-reload.test.ts"
+    "test": "tsx --test test/statement-data.test.ts test/categories.test.ts test/category-rules.test.ts test/periods.test.ts test/dashboard-live-reload.test.ts test/statement-upload.test.ts"
   },
   "dependencies": {
     "chart.js": "^4.6.1",

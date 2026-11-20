@@ -1,10 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Category } from "./categories.js";
 import {
   categorizeDescription,
-  type Category,
-} from "./categories.js";
+  loadCategoryRules,
+} from "./category-rules.js";
 import { loadCategoryOverrides } from "./category-overrides.js";
 import {
   matchInternalTransfers,
@@ -24,6 +25,9 @@ const statementsDirectory = join(scriptDirectory, "statements");
 const outputPath = join(scriptDirectory, "spending_log.csv");
 const categoryOverrides = await loadCategoryOverrides(
   join(scriptDirectory, "category-overrides.json"),
+);
+const categoryRules = await loadCategoryRules(
+  join(scriptDirectory, "category-rules.json"),
 );
 
 function toCsvField(value: string): string {
@@ -87,7 +91,8 @@ for (const transaction of statementData.transactions) {
   }
 
   const category =
-    categoryOverrides[id] ?? categorizeDescription(transaction.description);
+    categoryOverrides[id] ??
+    categorizeDescription(transaction.description, categoryRules);
   expenses.push({
     date: transaction.sourceDate,
     description: transaction.description,

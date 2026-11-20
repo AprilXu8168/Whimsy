@@ -1,0 +1,52 @@
+[
+  {
+    "category": "Groceries",
+    "keywords": [
+      "BUNNINGS",
+      "COLES",
+      "SUPERMA",
+      "TARGET",
+      "OFFICEWORKS",
+      "KMART"
+    ]
+  },
+  {
+    "category": "House",
+    "keywords": ["apx nab", "House", "RATE"]
+  },
+  {
+    "category": "Dining",
+    "keywords": ["McDonalds", "Dominos", "TASTY KITCHEN", "uber eats", "uber *eats"]
+  },
+  {
+    "category": "Wellness",
+    "keywords": [
+      "DENTAL",
+      "ICEWORLD",
+      "ICE SKATING",
+      "PLINEPH",
+      "DR JAMES BARTON",
+      "ETHOS"
+    ]
+  },
+  {
+    "category": "OutOfPlan",
+    "keywords": ["Debit Excess", "Overdraw Fee", "SPER"]
+  },
+  {
+    "category": "Insurance",
+    "keywords": ["AAMI", "MEDIBANK", "ALLIANZ"]
+  },
+  {
+    "category": "Transport",
+    "keywords": ["7 ELEVEN", "G-Force", "TRANSLINK", "REGO"]
+  },
+  {
+    "category": "Bills",
+    "keywords": ["Optus", "UNITYWATER", "ENERGY"]
+  },
+  {
+    "category": "Entertainment",
+    "keywords": ["AMAZON", "Apple", "PET CIRCLE", "SHEIN", "TEMU", "Daiso"]
+  }
+]
