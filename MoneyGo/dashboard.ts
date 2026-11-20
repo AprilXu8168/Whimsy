@@ -158,7 +158,7 @@ if (!dashboardScript) {
 }
 
 const server = createServer(async (request, response) => {
-  const pathname = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+  const pathname = new URL(request.url ?? "/", "http://0.0.0.0").pathname;
 
   try {
     if (pathname === "/" || pathname === "/index.html") {
@@ -209,7 +209,7 @@ const server = createServer(async (request, response) => {
       const origin = request.headers.origin;
       if (
         origin &&
-        origin !== `http://127.0.0.1:${port}` &&
+        origin !== `http://0.0.0.0:${port}` &&
         origin !== `http://localhost:${port}`
       ) {
         response.writeHead(403);
@@ -282,7 +282,7 @@ server.on("error", (error) => {
     console.warn(
       `Port ${unavailablePort} is already in use; trying ${port}.`,
     );
-    server.listen(port, "127.0.0.1");
+    server.listen(port, "0.0.0.0");
     return;
   }
 
@@ -291,11 +291,11 @@ server.on("error", (error) => {
 });
 
 server.on("listening", () => {
-  console.log(`MoneyGo dashboard: http://127.0.0.1:${port}`);
+  console.log(`MoneyGo dashboard: http://0.0.0.0:${port}`);
   console.log(
     `Using local statements: ${statementData.accounts.map((account) => account.name).join(", ")}`,
   );
   console.log("Press Ctrl+C to stop the server.");
 });
 
-server.listen(port, "127.0.0.1");
+server.listen(port, "0.0.0.0");
