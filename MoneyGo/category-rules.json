@@ -12,11 +12,23 @@
   },
   {
     "category": "House",
-    "keywords": ["apx nab", "House", "RATE"]
+    "keywords": [
+      "apx nab",
+      "House",
+      "RATE",
+      "MORETON BAY CITY CNCL"
+    ]
   },
   {
     "category": "Dining",
-    "keywords": ["McDonalds", "Dominos", "TASTY KITCHEN", "uber eats", "uber *eats"]
+    "keywords": [
+      "McDonalds",
+      "Dominos",
+      "TASTY KITCHEN",
+      "UBER *ONE",
+      "UBER *EATS",
+      "UBER EATS"
+    ]
   },
   {
     "category": "Wellness",
@@ -31,22 +43,47 @@
   },
   {
     "category": "OutOfPlan",
-    "keywords": ["Debit Excess", "Overdraw Fee", "SPER"]
+    "keywords": [
+      "Debit Excess",
+      "Overdraw Fee",
+      "SPER"
+    ]
   },
   {
     "category": "Insurance",
-    "keywords": ["AAMI", "MEDIBANK", "ALLIANZ"]
+    "keywords": [
+      "AAMI",
+      "MEDIBANK",
+      "ALLIANZ"
+    ]
   },
   {
     "category": "Transport",
-    "keywords": ["7 ELEVEN", "G-Force", "TRANSLINK", "REGO"]
+    "keywords": [
+      "7-ELEVEN",
+      "G-Force",
+      "TRANSLINK",
+      "REGO",
+      "7 ELEVEN"
+    ]
   },
   {
     "category": "Bills",
-    "keywords": ["Optus", "UNITYWATER", "ENERGY"]
+    "keywords": [
+      "Optus",
+      "UNITYWATER",
+      "ENERGY"
+    ]
   },
   {
     "category": "Entertainment",
-    "keywords": ["AMAZON", "Apple", "PET CIRCLE", "SHEIN", "TEMU", "Daiso"]
+    "keywords": [
+      "AMAZON",
+      "Apple",
+      "PET CIRCLE",
+      "SHEIN",
+      "TEMU",
+      "Daiso"
+    ]
   }
 ]

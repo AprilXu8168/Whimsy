@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { readdir, link, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { readStatements } from "./statement-data.js";
@@ -71,6 +79,7 @@ export async function saveStatementUpload(
   contents: Buffer,
 ): Promise<string> {
   await validateUpload(account, contents);
+  await mkdir(statementsDirectory, { recursive: true });
   const existingFiles = await findCsvFiles(statementsDirectory);
   const usedIndexes = new Set(
     existingFiles

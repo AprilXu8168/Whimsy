@@ -1,7 +1,22 @@
-console.log("[1/2] Scanning statements and refreshing spending_log.csv.");
-await import("./categorize-spends.js");
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { NoStatementFilesError } from "./statement-data.js";
 
-console.log("[2/2] Starting the dashboard with the refreshed statements.");
+const scriptDirectory = fileURLToPath(new URL(".", import.meta.url));
+await mkdir(join(scriptDirectory, "statements"), { recursive: true });
+
+console.log("[1/2] Scanning statements and refreshing spending_log.csv.");
+try {
+  await import("./categorize-spends.js");
+} catch (error) {
+  if (!(error instanceof NoStatementFilesError)) throw error;
+  console.log(
+    "No local statement CSV files found. The dashboard will use demo statements if available.",
+  );
+}
+
+console.log("[2/2] Starting the dashboard.");
 await import("./dashboard.js");
 
 export {};

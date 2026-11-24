@@ -132,20 +132,6 @@
         cursor: pointer;
       }
 
-      textarea {
-        box-sizing: border-box;
-        min-height: 112px;
-        padding: 11px 13px;
-        border: 1px solid #bdcecc;
-        border-radius: 8px;
-        background: #f8fbfb;
-        color: inherit;
-        font: inherit;
-        font-weight: 400;
-        line-height: 1.5;
-        resize: vertical;
-      }
-
       button,
       .link-button {
         display: inline-flex;
@@ -202,18 +188,26 @@
       }
 
       .rule-item {
+        display: grid;
+        gap: 12px;
         padding: 15px;
         border: 1px solid #e0eae8;
         border-radius: 10px;
         background: #fbfdfc;
+        border-color: #e0eae8;
+        background: color-mix(in srgb, var(--category-color) 10%, white);
+        border-color: color-mix(in srgb, var(--category-color) 28%, #e0eae8);
       }
 
-      .rule-item label {
-        display: grid;
+      .rule-keywords {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
         gap: 8px;
       }
 
       .rule-category {
+        margin: 0;
         color: #263b43;
         font-size: 1rem;
         font-weight: 700;
@@ -224,6 +218,50 @@
         color: #52666a;
         font-size: 0.88rem;
         font-weight: 400;
+      }
+
+      .keyword-row {
+        position: relative;
+        width: fit-content;
+        max-width: 100%;
+      }
+
+      .keyword-input {
+        display: block;
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+        height: 40px;
+        padding: 8px 32px 8px 10px;
+        border-radius: 8px;
+        background: #f8fbfb;
+        font-weight: 400;
+      }
+
+      .remove-keyword-button {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 24px;
+        min-height: 24px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #8d3931;
+        font-size: 1.15rem;
+        line-height: 1;
+      }
+
+      .remove-keyword-button:hover {
+        background: #f8e9e7;
+      }
+
+      .add-keyword-button {
+        border-color: #d3e2df;
+        background: #f3f8f7;
+        color: #285d56;
+        font-weight: 600;
       }
 
       .status {
@@ -430,9 +468,9 @@
       <section class="card" aria-labelledby="rules-title">
         <h2 id="rules-title">Category rules</h2>
         <p class="hint">
-          Edit matching keywords below, one per line. Matching ignores
-          capitalization and uses substring matches. If a description matches
-          more than one category, the first matching category wins.
+          Add, edit, or remove matching keywords in each category. Matching
+          ignores capitalization and uses substring matches. If a description
+          matches more than one category, the first matching category wins.
         </p>
         <form id="category-rules-form">
           <div id="category-rules-list" class="rule-list"></div>

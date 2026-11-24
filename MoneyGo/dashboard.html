@@ -12,6 +12,10 @@
         background: #f4f7f9;
       }
 
+      [hidden] {
+        display: none !important;
+      }
+
       body {
         max-width: 1100px;
         margin: 0 auto;
@@ -223,6 +227,16 @@
         color: #9c2c2c;
       }
 
+      .demo-notice {
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        border: 1px solid #e8d9a8;
+        border-radius: 8px;
+        background: #fff8e8;
+        color: #695517;
+        line-height: 1.5;
+      }
+
       #save-status {
         min-height: 1.5em;
         color: #236b4c;
@@ -322,6 +336,16 @@
     </p>
     <p id="balance-summary" aria-live="polite"></p>
     <p id="status" role="status"></p>
+    <p id="demo-notice" class="demo-notice" role="status" hidden>
+      No statement CSV was found, so this dashboard is showing demo data.
+      <a href="/settings">Upload your statement in Settings</a> to use your own
+      data.
+    </p>
+    <section id="empty-state" class="card" hidden aria-labelledby="empty-title">
+      <h2 id="empty-title">No statements uploaded yet</h2>
+      <p>Upload a CommBank statement CSV to populate your dashboard.</p>
+      <a class="settings-link" href="/settings">Upload a statement</a>
+    </section>
 
     <main class="charts">
       <section

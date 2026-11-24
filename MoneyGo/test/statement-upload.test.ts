@@ -42,6 +42,21 @@ test("saves a valid card upload to the next unused filename", async () => {
   );
 });
 
+test("creates the statements directory for a first upload", async () => {
+  const root = await mkdtemp(join(tmpdir(), "moneygo-upload-first-"));
+  temporaryDirectories.push(root);
+  const statementsDirectory = join(root, "statements");
+
+  const fileName = await saveStatementUpload(
+    statementsDirectory,
+    "card",
+    Buffer.from('01/01/2026,"-12.00","COLES","88.00"\n'),
+  );
+
+  assert.equal(fileName, "card.csv");
+  assert.deepEqual(await readdir(statementsDirectory), ["card.csv"]);
+});
+
 test("savings uploads use their own sequence", async () => {
   const root = await mkdtemp(join(tmpdir(), "moneygo-upload-savings-"));
   temporaryDirectories.push(root);

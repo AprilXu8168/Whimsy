@@ -27,6 +27,13 @@ export type StatementData = {
   transactions: StatementTransaction[];
 };
 
+export class NoStatementFilesError extends Error {
+  constructor(statementDirectory: string) {
+    super(`No CSV statement files found in ${statementDirectory}.`);
+    this.name = "NoStatementFilesError";
+  }
+}
+
 type ParsedStatementTransaction = StatementTransaction & {
   statementFile: string;
   sourceSequence: number;
@@ -244,7 +251,7 @@ export async function readStatements(
   const uniqueFiles = [...new Set(files)];
 
   if (uniqueFiles.length === 0) {
-    throw new Error(`No CSV statement files found in ${statementDirectory}.`);
+    throw new NoStatementFilesError(statementDirectory);
   }
 
   const accountLatestTransactions = new Map<
@@ -410,4 +417,66 @@ export async function readStatements(
     }),
   );
   return { accounts, transactions: publicTransactions };
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+export async function readStatementsWithDemoFallback(
+  statementDirectory: string,
+  demoDirectory: string,
+  inputPaths: string[] = [],
+): Promise<{ statementData: StatementData; usingDemoStatements: boolean }> {
+  if (inputPaths.length > 0) {
+    try {
+      return {
+        statementData: await readStatements(statementDirectory, inputPaths),
+        usingDemoStatements: false,
+      };
+    } catch (error) {
+      if (!(error instanceof NoStatementFilesError)) throw error;
+      return {
+        statementData: { accounts: [], transactions: [] },
+        usingDemoStatements: false,
+      };
+    }
+  }
+
+  try {
+    return {
+      statementData: await readStatements(statementDirectory),
+      usingDemoStatements: false,
+    };
+  } catch (error) {
+    if (
+      !(error instanceof NoStatementFilesError) &&
+      !isMissingPathError(error)
+    ) {
+      throw error;
+    }
+  }
+
+  try {
+    return {
+      statementData: await readStatements(statementDirectory, [demoDirectory]),
+      usingDemoStatements: true,
+    };
+  } catch (error) {
+    if (
+      !(error instanceof NoStatementFilesError) &&
+      !isMissingPathError(error)
+    ) {
+      throw error;
+    }
+    return {
+      statementData: { accounts: [], transactions: [] },
+      usingDemoStatements: false,
+    };
+  }
 }

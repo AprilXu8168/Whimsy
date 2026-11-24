@@ -1,5 +1,8 @@
+import { isCategory, type Category } from "./categories.js";
+import { categoryColors } from "./category-colors.js";
+
 type CategoryRule = {
-  category: string;
+  category: Category;
   keywords: string[];
 };
 
@@ -117,7 +120,7 @@ function parseRules(payload: unknown): CategoryRule[] {
       typeof rule !== "object" ||
       rule === null ||
       !("category" in rule) ||
-      typeof rule.category !== "string" ||
+      !isCategory(rule.category) ||
       !("keywords" in rule) ||
       !Array.isArray(rule.keywords) ||
       !rule.keywords.every((keyword: unknown) => typeof keyword === "string")
@@ -128,29 +131,104 @@ function parseRules(payload: unknown): CategoryRule[] {
   });
 }
 
+function createKeywordRow(
+  category: string,
+  keyword: string,
+  index: number,
+): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "keyword-row";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "keyword-input";
+  input.maxLength = 120;
+  input.spellcheck = false;
+  input.dataset.category = category;
+  input.value = keyword;
+  input.size = Math.max(8, keyword.length + 2);
+  input.setAttribute("aria-label", `Keyword ${index + 1} for ${category}`);
+  input.addEventListener("input", () => {
+    input.size = Math.max(8, input.value.length + 2);
+  });
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "remove-keyword-button";
+  removeButton.textContent = "×";
+  removeButton.setAttribute(
+    "aria-label",
+    `Remove keyword ${index + 1} from ${category}`,
+  );
+  removeButton.title = `Remove keyword ${index + 1}`;
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    const keywordList = row.parentElement;
+    if (!keywordList) {
+      throw new Error("Could not find the category keyword list.");
+    }
+    updateKeywordLabels(keywordList, category);
+  });
+
+  row.append(input, removeButton);
+  return row;
+}
+
+function updateKeywordLabels(keywordList: HTMLElement, category: string): void {
+  const rows = keywordList.querySelectorAll<HTMLDivElement>(".keyword-row");
+  rows.forEach((row, index) => {
+    const input = row.querySelector<HTMLInputElement>(".keyword-input");
+    const removeButton =
+      row.querySelector<HTMLButtonElement>(".remove-keyword-button");
+    if (!input || !removeButton) {
+      throw new Error("Category rules contain an invalid keyword row.");
+    }
+    input.setAttribute("aria-label", `Keyword ${index + 1} for ${category}`);
+    removeButton.setAttribute(
+      "aria-label",
+      `Remove keyword ${index + 1} from ${category}`,
+    );
+  });
+}
+
 function renderRules(rules: CategoryRule[]): void {
   categoryRulesList.replaceChildren();
   for (const rule of rules) {
-    const item = document.createElement("div");
+    const item = document.createElement("section");
     item.className = "rule-item";
+    item.dataset.category = rule.category;
+    item.style.setProperty("--category-color", categoryColors[rule.category]);
 
-    const label = document.createElement("label");
-    const category = document.createElement("span");
+    const category = document.createElement("h3");
     category.className = "rule-category";
     category.textContent = rule.category;
 
-    const help = document.createElement("span");
+    const help = document.createElement("p");
     help.className = "rule-help";
-    help.textContent = "One keyword per line";
+    help.textContent = "Add, edit, or remove matching keywords.";
 
-    const textarea = document.createElement("textarea");
-    textarea.rows = 4;
-    textarea.spellcheck = false;
-    textarea.dataset.category = rule.category;
-    textarea.value = rule.keywords.join("\n");
+    const keywordList = document.createElement("div");
+    keywordList.className = "rule-keywords";
+    for (const [index, keyword] of rule.keywords.entries()) {
+      keywordList.append(createKeywordRow(rule.category, keyword, index));
+    }
 
-    label.append(category, help, textarea);
-    item.append(label);
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "add-keyword-button";
+    addButton.textContent = "Add keyword";
+    addButton.addEventListener("click", () => {
+      const row = createKeywordRow(
+        rule.category,
+        "",
+        keywordList.children.length,
+      );
+      keywordList.append(row);
+      updateKeywordLabels(keywordList, rule.category);
+      row.querySelector<HTMLInputElement>(".keyword-input")?.focus();
+    });
+
+    item.append(category, help, keywordList, addButton);
     categoryRulesList.append(item);
   }
 }
@@ -246,14 +324,13 @@ statementFileInput.addEventListener("change", () => {
 categoryRulesForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const rules = Array.from(
-    categoryRulesList.querySelectorAll<HTMLTextAreaElement>(
-      "textarea[data-category]",
-    ),
-  ).map((textarea) => ({
-    category: textarea.dataset.category ?? "",
-    keywords: textarea.value
-      .split(/\r?\n/)
-      .map((keyword) => keyword.trim())
+    categoryRulesList.querySelectorAll<HTMLElement>(".rule-item"),
+  ).map((item) => ({
+    category: item.dataset.category ?? "",
+    keywords: Array.from(
+      item.querySelectorAll<HTMLInputElement>(".keyword-input"),
+    )
+      .map((input) => input.value.trim())
       .filter(Boolean),
   }));
 

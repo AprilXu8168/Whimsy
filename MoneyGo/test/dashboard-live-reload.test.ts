@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,8 @@ import { test } from "node:test";
 
 type TransactionsResponse = {
   revision: number;
+  usingDemoStatements: boolean;
+  accounts: { id: string; name: string; balanceCents: number }[];
   transactions: { description: string }[];
 };
 
@@ -31,6 +33,73 @@ async function getAvailablePort(): Promise<number> {
   });
   return address.port;
 }
+
+test("starts with no statements and guides the user to upload one", async (t) => {
+  const projectDirectory = fileURLToPath(new URL("../", import.meta.url));
+  const temporaryDirectory = await mkdtemp(
+    join(tmpdir(), "moneygo-empty-statements-"),
+  );
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }));
+  const statementsDirectory = join(temporaryDirectory, "statements");
+  await mkdir(statementsDirectory);
+
+  const port = await getAvailablePort();
+  const serverProcess = spawn(
+    process.execPath,
+    ["--import", "tsx", "index.ts", statementsDirectory],
+    {
+      cwd: projectDirectory,
+      env: { ...process.env, PORT: String(port) },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let serverOutput = "";
+  serverProcess.stdout?.on("data", (chunk: Buffer) => {
+    serverOutput += chunk.toString();
+  });
+  serverProcess.stderr?.on("data", (chunk: Buffer) => {
+    serverOutput += chunk.toString();
+  });
+  t.after(async () => {
+    if (serverProcess.exitCode === null && serverProcess.signalCode === null) {
+      serverProcess.kill("SIGTERM");
+      await once(serverProcess, "exit");
+    }
+  });
+
+  const deadline = Date.now() + 10_000;
+  let data: TransactionsResponse | undefined;
+  while (Date.now() < deadline) {
+    if (serverProcess.exitCode !== null) {
+      throw new Error(`Dashboard exited unexpectedly:\n${serverOutput}`);
+    }
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${port}/api/transactions`,
+      );
+      if (response.ok) {
+        data = (await response.json()) as TransactionsResponse;
+        break;
+      }
+    } catch {
+      // The server may not have finished starting yet.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  assert.ok(data, `Timed out waiting for dashboard startup:\n${serverOutput}`);
+  assert.deepEqual(data.accounts, []);
+  assert.deepEqual(data.transactions, []);
+  assert.equal(data.usingDemoStatements, false);
+
+  const dashboardResponse = await fetch(`http://127.0.0.1:${port}/`);
+  assert.equal(dashboardResponse.status, 200);
+  const dashboardHtml = await dashboardResponse.text();
+  assert.match(dashboardHtml, /No statements uploaded yet/);
+  assert.match(dashboardHtml, /href="\/settings">Upload a statement/);
+});
 
 test("reloads the transaction API when a watched statement changes", async (t) => {
   const projectDirectory = fileURLToPath(new URL("../", import.meta.url));

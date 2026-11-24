@@ -6,6 +6,7 @@ import { afterEach, test } from "node:test";
 import {
   matchInternalTransfers,
   readStatements,
+  readStatementsWithDemoFallback,
 } from "../statement-data.js";
 
 const temporaryDirectories: string[] = [];
@@ -85,6 +86,47 @@ test("loads all statement CSVs, counts card purchases, and sums account balances
       transfer.toAccount,
     ]),
     [["2026-01-02", 2_000, "card", "savings"]],
+  );
+});
+
+test("uses demo statements only when no local statement CSVs are available", async () => {
+  const root = await mkdtemp(join(tmpdir(), "moneygo-demo-fallback-"));
+  temporaryDirectories.push(root);
+  const statementsDirectory = join(root, "statements");
+  const demoDirectory = join(root, "demo-statements");
+  await mkdir(statementsDirectory);
+  await mkdir(demoDirectory);
+  await writeFile(
+    join(demoDirectory, "card.csv"),
+    '01/01/2026,"-10.00","Demo purchase","90.00"\n',
+  );
+
+  const demoResult = await readStatementsWithDemoFallback(
+    statementsDirectory,
+    demoDirectory,
+  );
+  assert.equal(demoResult.usingDemoStatements, true);
+  assert.deepEqual(
+    demoResult.statementData.transactions.map(
+      (transaction) => transaction.description,
+    ),
+    ["Demo purchase"],
+  );
+
+  await writeFile(
+    join(statementsDirectory, "card.csv"),
+    '01/01/2026,"-20.00","Local purchase","80.00"\n',
+  );
+  const localResult = await readStatementsWithDemoFallback(
+    statementsDirectory,
+    demoDirectory,
+  );
+  assert.equal(localResult.usingDemoStatements, false);
+  assert.deepEqual(
+    localResult.statementData.transactions.map(
+      (transaction) => transaction.description,
+    ),
+    ["Local purchase"],
   );
 });
 

@@ -1,6 +1,6 @@
 import { watch } from "node:fs";
 import { createServer } from "node:http";
-import { readFile, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -18,7 +18,7 @@ import {
 } from "./category-rules.js";
 import { loadCategoryOverrides } from "./category-overrides.js";
 import {
-  readStatements,
+  readStatementsWithDemoFallback,
   type StatementData,
 } from "./statement-data.js";
 import {
@@ -44,6 +44,7 @@ type Transaction = {
 
 const scriptDirectory = fileURLToPath(new URL(".", import.meta.url));
 const statementsDirectory = join(scriptDirectory, "statements");
+const demoStatementsDirectory = join(scriptDirectory, "demo-statements");
 const dashboardPath = join(scriptDirectory, "dashboard.html");
 const settingsPath = join(scriptDirectory, "settings.html");
 const categoryOverridesPath = join(
@@ -115,9 +116,17 @@ let categoryOverrides: Record<string, Category> = {};
 let categoryRules: CategoryRule[] = [];
 let dataVersion = 0;
 let statementReloadError: string | null = null;
+let usingDemoStatements = false;
 
 async function reloadDashboardData(): Promise<void> {
-  const nextStatementData = await readStatements(statementsDirectory, inputPaths);
+  const {
+    statementData: nextStatementData,
+    usingDemoStatements: nextUsingDemoStatements,
+  } = await readStatementsWithDemoFallback(
+    statementsDirectory,
+    demoStatementsDirectory,
+    inputPaths,
+  );
   const nextCategoryOverrides = await loadCategoryOverrides(
     categoryOverridesPath,
   );
@@ -163,10 +172,12 @@ async function reloadDashboardData(): Promise<void> {
     nextTransactions.map((transaction) => [transaction.id, transaction]),
   );
   categoryOverrides = nextCategoryOverrides;
+  usingDemoStatements = nextUsingDemoStatements;
   dataVersion += 1;
 }
 
 categoryRules = await loadCategoryRules(categoryRulesPath);
+await mkdir(statementsDirectory, { recursive: true });
 await reloadDashboardData();
 
 let reloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -450,6 +461,7 @@ const server = createServer(async (request, response) => {
         JSON.stringify({
           revision: dataVersion,
           refreshError: statementReloadError,
+          usingDemoStatements,
           categories,
           accounts: statementData.accounts,
           transactions,
@@ -625,9 +637,14 @@ server.on("error", (error) => {
 
 server.on("listening", () => {
   console.log(`MoneyGo dashboard: http://0.0.0.0:${port}`);
-  console.log(
-    `Using local statements: ${statementData.accounts.map((account) => account.name).join(", ")}`,
-  );
+  const accountNames = statementData.accounts.map((account) => account.name);
+  if (usingDemoStatements) {
+    console.log("No local statements found; using demo statements.");
+  } else if (accountNames.length > 0) {
+    console.log(`Using local statements: ${accountNames.join(", ")}`);
+  } else {
+    console.log("No statement files found. Upload one from Settings.");
+  }
   console.log("Watching statement files for changes.");
   console.log("Press Ctrl+C to stop the server.");
 });

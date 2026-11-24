@@ -1,6 +1,7 @@
 import Chart from "chart.js/auto";
 import type { ChartOptions } from "chart.js";
 import type { Category } from "./categories.js";
+import { categoryColors } from "./category-colors.js";
 import {
   getPeriods,
   periodKeyForMonth,
@@ -25,6 +26,7 @@ type Transaction = {
 type TransactionResponse = {
   revision: number;
   refreshError: string | null;
+  usingDemoStatements: boolean;
   categories: Category[];
   accounts: { id: string; name: string; balanceCents: number }[];
   transactions: Transaction[];
@@ -68,6 +70,10 @@ function getTableControls(name: string): TableControls {
 
 const periodSelect =
   getRequiredElement<HTMLSelectElement>("#period-select");
+const periodSelectLabel =
+  getRequiredElement<HTMLLabelElement>('label[for="period-select"]');
+const periodTabsGroup =
+  getRequiredElement<HTMLDivElement>(".period-tabs");
 const periodTabs = [
   ...document.querySelectorAll<HTMLButtonElement>("[data-period-view]"),
 ];
@@ -79,6 +85,14 @@ const saveStatus =
   getRequiredElement<HTMLParagraphElement>("#save-status");
 const balanceSummary =
   getRequiredElement<HTMLParagraphElement>("#balance-summary");
+const emptyState =
+  getRequiredElement<HTMLElement>("#empty-state");
+const demoNotice =
+  getRequiredElement<HTMLParagraphElement>("#demo-notice");
+const chartsSection =
+  getRequiredElement<HTMLElement>(".charts");
+const dashboardSections =
+  getRequiredElement<HTMLDivElement>(".dashboard-sections");
 const spendingTitle =
   getRequiredElement<HTMLHeadingElement>("#spending-title");
 const balanceTitle =
@@ -143,19 +157,6 @@ let balanceChart: Chart<"line", number[], string> | undefined;
 let categoryChart: Chart<"pie", number[], string> | undefined;
 let selectedExpenseCategory: Category | null = null;
 let selectedExpenseDate: string | null = null;
-
-const categoryColors: Record<Category, string> = {
-  Groceries: "#2e7d32",
-  House: "#546e7a",
-  Dining: "#ef6c00",
-  Wellness: "#00897b",
-  OutOfPlan: "#6d4c41",
-  Insurance: "#7b1fa2",
-  Transport: "#1565c0",
-  Bills: "#c62828",
-  Entertainment: "#ad1457",
-  Review: "#757575",
-};
 
 function isPeriodView(value: string | undefined): value is PeriodView {
   return (
@@ -900,6 +901,25 @@ function applyTransactionResponse(
   accountCount = payload.accounts.length;
   categoryNames = payload.categories;
   dataRevision = payload.revision;
+  demoNotice.hidden = !payload.usingDemoStatements;
+
+  availableMonths = [
+    ...new Set(
+      allTransactions.map((transaction) => transaction.date.slice(0, 7)),
+    ),
+  ].sort();
+
+  if (availableMonths.length === 0) {
+    balanceSummary.textContent = "No statement data available yet.";
+    demoNotice.hidden = true;
+    emptyState.hidden = false;
+    chartsSection.hidden = true;
+    dashboardSections.hidden = true;
+    periodSelectLabel.hidden = true;
+    periodTabsGroup.hidden = true;
+    status.textContent = "";
+    return;
+  }
 
   const combinedBalanceCents = payload.accounts.reduce(
     (total, account) => total + account.balanceCents,
@@ -908,16 +928,11 @@ function applyTransactionResponse(
   balanceSummary.textContent =
     `Combined balance (${payload.accounts.length} accounts): ` +
     currency.format(combinedBalanceCents / 100);
-  availableMonths = [
-    ...new Set(
-      allTransactions.map((transaction) => transaction.date.slice(0, 7)),
-    ),
-  ].sort();
-
-  if (availableMonths.length === 0) {
-    throw new Error("The statement contains no transactions.");
-  }
-
+  emptyState.hidden = true;
+  chartsSection.hidden = false;
+  dashboardSections.hidden = false;
+  periodSelectLabel.hidden = false;
+  periodTabsGroup.hidden = false;
   renderPeriodOptions(periodView, preferredPeriodKey);
 }
 
