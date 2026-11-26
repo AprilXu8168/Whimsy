@@ -89,7 +89,7 @@ test("loads all statement CSVs, counts card purchases, and sums account balances
   );
 });
 
-test("uses demo statements only when no local statement CSVs are available", async () => {
+test("uses demo statements when local CSVs are missing or empty", async () => {
   const root = await mkdtemp(join(tmpdir(), "moneygo-demo-fallback-"));
   temporaryDirectories.push(root);
   const statementsDirectory = join(root, "statements");
@@ -101,6 +101,13 @@ test("uses demo statements only when no local statement CSVs are available", asy
     '01/01/2026,"-10.00","Demo purchase","90.00"\n',
   );
 
+  const missingResult = await readStatementsWithDemoFallback(
+    statementsDirectory,
+    demoDirectory,
+  );
+  assert.equal(missingResult.usingDemoStatements, true);
+
+  await writeFile(join(statementsDirectory, "card.csv"), "");
   const demoResult = await readStatementsWithDemoFallback(
     statementsDirectory,
     demoDirectory,
@@ -127,6 +134,25 @@ test("uses demo statements only when no local statement CSVs are available", asy
       (transaction) => transaction.description,
     ),
     ["Local purchase"],
+  );
+});
+
+test("does not replace invalid local statements with demo data", async () => {
+  const root = await mkdtemp(join(tmpdir(), "moneygo-invalid-statement-"));
+  temporaryDirectories.push(root);
+  const statementsDirectory = join(root, "statements");
+  const demoDirectory = join(root, "demo-statements");
+  await mkdir(statementsDirectory);
+  await mkdir(demoDirectory);
+  await writeFile(join(statementsDirectory, "card.csv"), "invalid statement");
+  await writeFile(
+    join(demoDirectory, "card.csv"),
+    '01/01/2026,"-10.00","Demo purchase","90.00"\n',
+  );
+
+  await assert.rejects(
+    readStatementsWithDemoFallback(statementsDirectory, demoDirectory),
+    /required in card\.csv on CSV line 1/,
   );
 });
 

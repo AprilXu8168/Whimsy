@@ -34,6 +34,13 @@ export class NoStatementFilesError extends Error {
   }
 }
 
+export class NoStatementDataError extends Error {
+  constructor(fileName: string) {
+    super(`The statement CSV contains no transactions: ${fileName}`);
+    this.name = "NoStatementDataError";
+  }
+}
+
 type ParsedStatementTransaction = StatementTransaction & {
   statementFile: string;
   sourceSequence: number;
@@ -268,7 +275,7 @@ export async function readStatements(
     }) as string[][];
 
     if (rows.length === 0) {
-      throw new Error(`The statement CSV is empty: ${fileName}`);
+      throw new NoStatementDataError(fileName);
     }
 
     const columns = getColumnIndexes(rows[0], fileName);
@@ -316,7 +323,7 @@ export async function readStatements(
     }
 
     if (parsedRows.length === 0) {
-      throw new Error(`The statement CSV contains no transactions: ${fileName}`);
+      throw new NoStatementDataError(fileName);
     }
 
     const accountNewestFirst =
@@ -456,6 +463,7 @@ export async function readStatementsWithDemoFallback(
   } catch (error) {
     if (
       !(error instanceof NoStatementFilesError) &&
+      !(error instanceof NoStatementDataError) &&
       !isMissingPathError(error)
     ) {
       throw error;
@@ -470,6 +478,7 @@ export async function readStatementsWithDemoFallback(
   } catch (error) {
     if (
       !(error instanceof NoStatementFilesError) &&
+      !(error instanceof NoStatementDataError) &&
       !isMissingPathError(error)
     ) {
       throw error;
