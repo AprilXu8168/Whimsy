@@ -137,6 +137,38 @@ test("uses demo statements when local CSVs are missing or empty", async () => {
   );
 });
 
+test("uses valid local statements alongside empty CSV files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "moneygo-partial-statements-"));
+  temporaryDirectories.push(root);
+  const statementsDirectory = join(root, "statements");
+  const demoDirectory = join(root, "demo-statements");
+  await mkdir(statementsDirectory);
+  await mkdir(demoDirectory);
+  await writeFile(join(statementsDirectory, "card.csv"), "");
+  await writeFile(join(statementsDirectory, "savings.csv"), "");
+  await writeFile(
+    join(statementsDirectory, "savings_0.csv"),
+    '01/01/2026,"+10.00","Local savings transaction","110.00"\n',
+  );
+  await writeFile(
+    join(demoDirectory, "card.csv"),
+    '01/01/2026,"-10.00","Demo purchase","90.00"\n',
+  );
+
+  const result = await readStatementsWithDemoFallback(
+    statementsDirectory,
+    demoDirectory,
+  );
+
+  assert.equal(result.usingDemoStatements, false);
+  assert.deepEqual(
+    result.statementData.transactions.map(
+      (transaction) => transaction.description,
+    ),
+    ["Local savings transaction"],
+  );
+});
+
 test("does not replace invalid local statements with demo data", async () => {
   const root = await mkdtemp(join(tmpdir(), "moneygo-invalid-statement-"));
   temporaryDirectories.push(root);

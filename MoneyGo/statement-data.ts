@@ -35,8 +35,8 @@ export class NoStatementFilesError extends Error {
 }
 
 export class NoStatementDataError extends Error {
-  constructor(fileName: string) {
-    super(`The statement CSV contains no transactions: ${fileName}`);
+  constructor(fileNames: string[]) {
+    super(`Statement CSV files contain no transactions: ${fileNames.join(", ")}`);
     this.name = "NoStatementDataError";
   }
 }
@@ -266,6 +266,7 @@ export async function readStatements(
     { date: string; balanceCents: number; name: string }
   >();
   const transactions: ParsedStatementTransaction[] = [];
+  const emptyFiles: string[] = [];
 
   for (const filePath of uniqueFiles) {
     const fileName = basename(filePath);
@@ -275,7 +276,8 @@ export async function readStatements(
     }) as string[][];
 
     if (rows.length === 0) {
-      throw new NoStatementDataError(fileName);
+      emptyFiles.push(fileName);
+      continue;
     }
 
     const columns = getColumnIndexes(rows[0], fileName);
@@ -323,7 +325,8 @@ export async function readStatements(
     }
 
     if (parsedRows.length === 0) {
-      throw new NoStatementDataError(fileName);
+      emptyFiles.push(fileName);
+      continue;
     }
 
     const accountNewestFirst =
@@ -353,6 +356,10 @@ export async function readStatements(
         isIncome: transaction.amountCents > 0,
       });
     }
+  }
+
+  if (transactions.length === 0) {
+    throw new NoStatementDataError(emptyFiles);
   }
 
   const seenTransactionKeys = new Set<string>();
